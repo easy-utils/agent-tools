@@ -21,6 +21,8 @@ run() {
 }
 
 # ---- cross-client source guards (fast) ----
+# Identity + default-gateway + tagged-deps guard across ALL 8 client repos.
+run python3 clients.py
 run python3 icons.py --check
 run python3 icons.py --positions
 run python3 parity.py
