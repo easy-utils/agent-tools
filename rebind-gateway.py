@@ -11,7 +11,7 @@ There are TWO gateways and TWO keys with different model visibility:
 
 Per the owner's instruction:
   * myuser                    -> dev004 + GW_KEY_DEV004 (full set, incl. local-text)
-  * default / e2e / verify-t1 -> gray  + GW_KEY_GRAY     (subset, no `local/*`)
+  * default / test1 / test2 / test3 -> gray + GW_KEY_GRAY (subset, no `local/*`)
 
 For each tenant this deletes its existing `gateway*` provider rows, then
 re-registers one provider per modality with only its models.
@@ -49,9 +49,10 @@ TEXT_CTX = 262144
 # Tokens come from AGENT_TOKEN_<TENANT> (uppercased, dashes -> underscores).
 TENANTS: dict[str, tuple[str, str, str, bool]] = {
     "default": (os.environ.get("AGENT_TOKEN_DEFAULT", ""), GW_GRAY, KEY_SK, False),
+    "test1": (os.environ.get("AGENT_TOKEN_TEST1", ""), GW_GRAY, KEY_SK, False),
+    "test2": (os.environ.get("AGENT_TOKEN_TEST2", ""), GW_GRAY, KEY_SK, False),
+    "test3": (os.environ.get("AGENT_TOKEN_TEST3", ""), GW_GRAY, KEY_SK, False),
     "myuser": (os.environ.get("AGENT_TOKEN_MYUSER", ""), GW_DEV004, KEY_HZ, True),
-    "e2e-providers": (os.environ.get("AGENT_TOKEN_E2E_PROVIDERS", ""), GW_GRAY, KEY_SK, False),
-    "verify-t1": (os.environ.get("AGENT_TOKEN_VERIFY_T1", ""), GW_GRAY, KEY_SK, False),
 }
 
 # capability -> [(model id, display name, context limit)] for EVERY tenant.
