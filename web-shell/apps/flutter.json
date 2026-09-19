@@ -1,0 +1,23 @@
+{
+  "dir": "agent-flutter",
+  "index_html": "web/index.html",
+  "manifest_path": "web/manifest.json",
+  "manifest_href": "manifest.json",
+  "lang": "en",
+  "app_title": "Easy Agent",
+  "short_name": "Easy Agent",
+  "description": "EasyLab Agent — chat with the easy-rpc agent backend",
+  "theme_color": "#ffffff",
+  "status_bar_style": "black",
+  "bg_color": "#ffffff",
+  "bg_color_dark": "#0a0a0a",
+  "mark": "EF",
+  "mark_color": "#2563eb",
+  "favicon": "favicon.png",
+  "apple_touch_icon": "icons/Icon-192.png",
+  "icon_dir": "icons/",
+  "start_url": ".",
+  "head_top": "\n  <!-- Flutter replaces $FLUTTER_BASE_HREF with the build base (default /). -->\n  <base href=\"$FLUTTER_BASE_HREF\">\n  <meta content=\"IE=Edge\" http-equiv=\"X-UA-Compatible\">",
+  "root_css": "",
+  "body": "  <!--\n    Point the engine's runtime fallback-font downloads (missing-glyph Noto\n    fonts and the default Roboto) at a LOCAL base. The engine default is\n    fonts.gstatic.com, which is unreachable on many mobile networks: the\n    resulting font-fetch retry storm left the app blank/never-rendered on\n    phones. Set BEFORE the bootstrap so the engine reads it during init.\n    Unknown local paths 404 (harmless: the fallback service degrades\n    gracefully), and NO request ever leaves for gstatic.\n  -->\n  <script>\n    window.flutterConfiguration = Object.assign(\n      window.flutterConfiguration || {},\n      { fontFallbackBaseUrl: \"fallback-fonts/s/\" },\n    );\n  </script>\n  <script src=\"flutter_bootstrap.js\" async></script>"
+}

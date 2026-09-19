@@ -1,0 +1,21 @@
+{
+  "dir": "agent-compose-app",
+  "index_html": "src/wasmJsMain/resources/index.html",
+  "manifest_path": "src/wasmJsMain/resources/manifest.webmanifest",
+  "manifest_href": "manifest.webmanifest",
+  "lang": "zh-CN",
+  "app_title": "Easy Agent",
+  "short_name": "Easy Agent",
+  "description": "EasyLab Agent — chat with the easy-rpc agent backend",
+  "theme_color": "#ffffff",
+  "bg_color": "#ffffff",
+  "bg_color_dark": "#0a0a0a",
+  "mark": "EC",
+  "mark_color": "#059669",
+  "favicon": "favicon.png",
+  "apple_touch_icon": "icons/Icon-192.png",
+  "icon_dir": "icons/",
+  "start_url": ".",
+  "root_css": "\n    /* Compose/Wasm renders through ComposeViewport: it clears this element and\n       creates a canvas inside it, so it must be a normal block element (not a\n       <canvas>). It sizes the canvas ONCE from this element's rect, and only\n       re-measures when a window `resize` fires.\n       `position: fixed; inset: 0` (NOT 100dvh): the layout-viewport box is the\n       reliable measure on a cold PWA start, whereas dvh/vh could resolve to a\n       stale value while the browser is still transitioning into standalone. */\n    #ComposeTarget { position: fixed; inset: 0; display: block; }",
+  "body": "  <div id=\"ComposeTarget\"></div>\n  <script type=\"application/javascript\" src=\"composeApp.js\"></script>\n  <script>\n    // Remove the pre-boot splash once Compose has painted its canvas. A\n    // MutationObserver on the mount is the reliable signal (the WASM runtime\n    // injects its <canvas> there); a timeout is the safety net.\n    //\n    // Compose sizes the canvas ONCE from the mount rect and re-measures ONLY\n    // on a window `resize` — it does NOT observe the element. On a cold start\n    // in an INSTALLED PWA the viewport is briefly stale (the browser is still\n    // switching to standalone), so the canvas was laid out too tall and the\n    // composer / bottom tab bar sat below the visible area until the user\n    // manually resized (which fired `resize` and fixed it until the next cold\n    // start). Bridge element-size changes to a synthetic `resize` so Compose\n    // re-measures when the viewport settles, rotates, or the keyboard opens.\n    (function () {\n      var target = document.getElementById('ComposeTarget');\n      var splash = document.getElementById('agent-splash');\n      function drop() { if (splash && splash.parentNode) splash.parentNode.removeChild(splash); }\n      function nudge() {\n        if (!target) return;\n        var r = target.getBoundingClientRect();\n        var key = Math.round(r.width) + 'x' + Math.round(r.height);\n        if (key === nudge.last) return;\n        nudge.last = key;\n        window.dispatchEvent(new Event('resize'));\n      }\n      // Cold-start safety net: the viewport may settle with no observable event\n      // AND Compose's `resize` listener may attach only after the wasm boots,\n      // so force a dispatch regardless of whether the box changed.\n      function kick() { nudge.last = null; nudge(); }\n      if (target) {\n        // Re-measure whenever the mount's box changes (viewport settle / rotate).\n        if (window.ResizeObserver) new ResizeObserver(nudge).observe(target);\n        window.addEventListener('load', kick);\n        window.addEventListener('orientationchange', function () { setTimeout(kick, 100); });\n        if (window.visualViewport) window.visualViewport.addEventListener('resize', kick);\n        setTimeout(kick, 300);\n        setTimeout(kick, 1000);\n        setTimeout(kick, 2500);\n        // Splash removal is driven by the first painted canvas.\n        var obs = new MutationObserver(function () {\n          if (target.querySelector('canvas')) { obs.disconnect(); drop(); }\n        });\n        obs.observe(target, { childList: true, subtree: true });\n      }\n      setTimeout(drop, 15000);\n    })();\n  </script>"
+}
