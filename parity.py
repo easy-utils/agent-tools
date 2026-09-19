@@ -20,7 +20,7 @@ from pathlib import Path
 # $AGENT_APPS_ROOT when the apps live elsewhere.
 import os as _os
 ROOT = Path(_os.environ.get('AGENT_APPS_ROOT') or Path(__file__).resolve().parent.parent)
-FLUTTER = ROOT / "flutter" / "l10n"
+FLUTTER = ROOT / "agent-flutter" / "l10n"
 PORTS = {
     "compose": ROOT / "agent-compose-app/src/commonMain/kotlin/com/agent/app/i18n/I18n.kt",
     "swiftui": ROOT / "agent-swiftui-app/Sources/agent-app/Core/I18n.swift",

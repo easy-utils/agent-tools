@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the web shell (index.html + manifest) for every ABCP web client
+"""Generate the web shell (index.html + manifest) for every Easy Agent web client
 from ONE template.
 
 WHY: Flutter / webui / Compose each hand-maintained their own index.html +

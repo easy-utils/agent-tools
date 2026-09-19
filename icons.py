@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified icon table for the four ABCP clients + a parity checker.
+"""Unified icon table for the four Easy Agent clients + a parity checker.
 
 WHY: each client used a different icon set (Flutter = Material Icons, Compose =
 materialIconsExtended, WebUI = @lucide/svelte, SwiftUI = SF Symbols), so the same
@@ -704,7 +704,7 @@ def generated_files(rows: dict[str, dict[str, str]]) -> dict[Path, list[str]]:
     fl = header + [
         "import 'package:flutter_lucide/flutter_lucide.dart';",
         "",
-        "/// Semantic icon slots shared by all four ABCP clients.",
+        "/// Semantic icon slots shared by all four Easy Agent clients.",
         "abstract final class AppIcons {",
     ]
     for slot, r in sorted(rows.items()):
@@ -716,7 +716,7 @@ def generated_files(rows: dict[str, dict[str, str]]) -> dict[Path, list[str]]:
     for slot, r in sorted(rows.items()):
         web.append(f"  {r['web']},")
     web += ["} from '@lucide/svelte'", "",
-            "/** Semantic icon slots shared by all four ABCP clients. */",
+            "/** Semantic icon slots shared by all four Easy Agent clients. */",
             "export const AppIcons = {"]
     for slot, r in sorted(rows.items()):
         web.append(f"  {slot}: {r['web']},")
@@ -729,7 +729,7 @@ def generated_files(rows: dict[str, dict[str, str]]) -> dict[Path, list[str]]:
     for slot, r in sorted(rows.items()):
         kt.append(f"import com.composables.icons.lucide.{r['compose']}")
     kt += ["",
-           "/** Semantic icon slots shared by all four ABCP clients (tools/icons.py).",
+           "/** Semantic icon slots shared by all four Easy Agent clients (tools/icons.py).",
            " *",
            " *  Compose's Lucide port exposes glyphs as extension properties on the",
            " *  `Lucide` object, so this table adapts the cross-client slot names to",
@@ -744,7 +744,7 @@ def generated_files(rows: dict[str, dict[str, str]]) -> dict[Path, list[str]]:
     # `LucideIcon` init is `(shape:style:size:color:strokeWidth:absoluteStrokeWidth:)`
     # and `LucideIconName` is an enum whose cases are the glyphs.
     sw = header + ["import SwiftUI", "import LucideSwift", "",
-                   "/// Semantic icon slots shared by all four ABCP clients.",
+                   "/// Semantic icon slots shared by all four Easy Agent clients.",
                    "///",
                    "/// `AppIcon` renders them with the bundled Lucide strokes (2pt, matching",
                    "/// the Flutter / Compose / WebUI clients), so the same action shows the",
