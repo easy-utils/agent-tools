@@ -3,7 +3,7 @@
 
 WHY: every per-connection cache (the sqlite mirror + read watermarks) is keyed
 by `scopeOf(baseUrl, token)` so two users / tenants on one device never share
-state. The four clients each implement that hash independently, so this file
+state. The clients each implement that hash independently, so this file
 pins the algorithm and a golden vector table; `--check` asserts the same
 expression is present in each client's source.
 
@@ -27,7 +27,6 @@ ROOT = Path(_os.environ.get('AGENT_APPS_ROOT') or Path(__file__).resolve().paren
 
 SCOPE_FILES = {
     "flutter": "agent-flutter/lib/scope.dart",
-    "webui": "agent-webui/src/lib/scope.ts",
     "compose": "agent-compose-app/src/commonMain/kotlin/com/agent/app/Scope.kt",
     "swiftui": "agent-swiftui-app/Sources/agent-app/Core/Scope.swift",
 }
@@ -35,7 +34,6 @@ SCOPE_FILES = {
 # differs).
 SCOPE_SHAPE = {
     "flutter": r"5381.*?0x7fffffff",
-    "webui": r"5381.*?0x7fffffff",
     "compose": r"5381.*?0x7fffffff",
     "swiftui": r"5381.*?0x7fff_ffff",
 }
@@ -83,7 +81,7 @@ def main() -> int:
         print(f"  {base:<26}{tok:<12}{got}  {mark}")
         if got != exp:
             rc = 1
-    print(f"scopes: {'OK' if rc == 0 else 'FAILED'} ({len(VECTORS)} vectors, 4 clients)")
+    print(f"scopes: {'OK' if rc == 0 else 'FAILED'} ({len(VECTORS)} vectors, 3 clients)")
     return rc
 
 

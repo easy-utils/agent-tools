@@ -1,51 +1,13 @@
-# Easy Agent web front ends: static nginx hosts for the three browser clients
-# built from the sibling app repos. Each image is produced by the app's own
+# Easy Agent web front ends: static nginx hosts for the browser clients built
+# from the sibling app repos. Each image is produced by the app's own
 # tool/build-web-image.sh (forgejo OCI, namespace easylab):
 #
-#   agent-webui    -> agent-webui/tool/build-web-image.sh     (Dockerfile)
 #   agent-flutter  -> agent-flutter/tool/build-web-image.sh   (Dockerfile.web)
 #   agent-compose  -> agent-compose-app/tool/build-web-image.sh (Dockerfile.web)
 #
 # Replace the image tags with the freshly built ones (or `kubectl -n temp set
 # image`) then apply. All serve on 8080 with /healthz; the compose image also
 # sets COOP/COEP (Compose/Wasm needs SharedArrayBuffer).
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: agent-webui
-  namespace: temp
-  labels: { app: agent-webui }
-spec:
-  replicas: 1
-  selector: { matchLabels: { app: agent-webui } }
-  template:
-    metadata:
-      labels: { app: agent-webui }
-    spec:
-      containers:
-        - name: web
-          image: forgejo.develop.10.199.64.20.nip.io/easylab/agent-webui:20260919092333
-          imagePullPolicy: IfNotPresent
-          ports: [ { containerPort: 8080, protocol: TCP } ]
-          readinessProbe:
-            httpGet: { path: /healthz, port: 8080 }
-            initialDelaySeconds: 2
-            periodSeconds: 5
-          resources:
-            limits: { cpu: 200m, memory: 128Mi }
-            requests: { cpu: 20m, memory: 32Mi }
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: agent-webui
-  namespace: temp
-  labels: { app: agent-webui }
-spec:
-  type: ClusterIP
-  selector: { app: agent-webui }
-  ports: [ { name: http, port: 80, targetPort: 8080 } ]
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:

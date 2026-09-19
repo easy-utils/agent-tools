@@ -2,10 +2,10 @@
 """Generate the web shell (index.html + manifest) for every Easy Agent web client
 from ONE template.
 
-WHY: Flutter / webui / Compose each hand-maintained their own index.html +
-manifest, so they drifted — the installed-PWA safe-area bug (composer and tab
-bar painted under the Android gesture bar) shipped in all three because there
-was no single place to fix it. This generator owns the shared shell (head,
+WHY: Flutter / Compose each hand-maintained their own index.html + manifest,
+so they drifted — the installed-PWA safe-area bug (composer and tab bar painted
+under the Android gesture bar) shipped in every client because there was no
+single place to fix it. This generator owns the shared shell (head,
 pre-boot splash, safe-area handling); each app supplies only what genuinely
 differs (mark, hue, mount id, boot script).
 

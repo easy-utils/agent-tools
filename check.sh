@@ -4,7 +4,7 @@
 # The app repos are SIBLINGS of this `agent-tools` checkout (or live under
 # $AGENT_APPS_ROOT). Run this before every release.
 #
-#   bash check.sh            # fast: the python guards + webui svelte-check
+#   bash check.sh            # fast: the python guards
 #   bash check.sh --full     # also flutter analyze + compose/swift compile
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,13 +28,6 @@ run python3 avatars.py
 run python3 scopes.py
 # Generated web shells (index.html/manifest) must match web-shell/.
 run python3 web-shell/gen.py --check
-
-# ---- webui: svelte-check covers .svelte (tsc alone does NOT) ----
-if [ -d "$APPS/agent-webui/node_modules" ]; then
-  run bash -c "cd '$APPS/agent-webui' && npm run check"
-else
-  echo "(skip webui: no node_modules)"
-fi
 
 # ---- heavier per-client compiles (opt-in) ----
 if [ "$FULL" = 1 ]; then

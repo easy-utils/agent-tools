@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Unified icon table for the four Easy Agent clients + a parity checker.
+"""Unified icon table for the Easy Agent clients + a parity checker.
 
 WHY: each client used a different icon set (Flutter = Material Icons, Compose =
-materialIconsExtended, WebUI = @lucide/svelte, SwiftUI = SF Symbols), so the same
-action rendered a different glyph on every platform. This module is the single
-source of truth: one row per SEMANTIC SLOT, each naming the exact identifier the
-four clients must use.
+materialIconsExtended, SwiftUI = SF Symbols), so the same action rendered a
+different glyph on every platform. This module is the single source of truth:
+one row per SEMANTIC SLOT, each naming the exact identifier the three clients
+must use.
 
 The table is HAND-WRITTEN (no code generation): Flutter/Compose/SwiftUI expose
-typed constants and WebUI imports typed components, so the clients reference
-their library's own names directly. Only the few slots whose names diverge
-between the four ports carry explicit per-client overrides.
+typed constants, so the clients reference their library's own names directly.
+Only the few slots whose names diverge between the ports carry explicit
+per-client overrides.
 
 Field meanings (all optional except `lucide`):
     lucide   canonical lucide id (lucide-static 1.46)
@@ -22,7 +22,7 @@ Derivation when a field is omitted: the canonical id, converted to each
 library's naming convention (snake_case / PascalCase / lowerCamelCase).
 
 Usage:
-    python3 tools/icons.py --check     # verify every row resolves in all four
+    python3 tools/icons.py --check     # verify every row resolves in all three
     python3 tools/icons.py --list      # print the resolved table
     python3 tools/icons.py --emit      # regenerate the per-client alias files
 """
@@ -140,7 +140,7 @@ SLOTS: dict[str, dict[str, str]] = {
     "database": {"lucide": "database"},
     "layers": {"lucide": "layers"},
     # `package` is a Kotlin/Swift word, so the shared slot name is `pkg`
-    # (the four libraries name the glyph package / packageIcon / Package).
+    # (the three libraries name the glyph package / packageIcon / Package).
     "pkg": {"lucide": "package", "swift": "packageIcon"},
     "inbox": {"lucide": "inbox"},
     "rocket": {"lucide": "rocket"},
@@ -198,7 +198,7 @@ SLOTS: dict[str, dict[str, str]] = {
 # --- UI position registry -----------------------------------------------------
 # WHY: a slot being reachable on only SOME clients is almost always a port that
 # forgot to adopt the shared glyph (or kept a leftover Material/SF/emoji literal)
-# — that is exactly how the four clients drifted apart before. So `--check` does
+# — that is exactly how the clients drifted apart before. So `--check` does
 # not merely validate the table: it walks the real client sources, collects every
 # `AppIcons.<slot>` they reference, and applies three rules.
 #
@@ -214,10 +214,9 @@ SLOTS: dict[str, dict[str, str]] = {
 # Paths are relative to the repo root; the `--emit` generated files are skipped
 # (they *define* the slots rather than adopting them).
 
-# The four generated per-client alias files (excluded from usage scanning).
+# The three generated per-client alias files (excluded from usage scanning).
 GENERATED = {
     "agent-flutter/lib/icons.dart",
-    "agent-webui/src/lib/icons.ts",
     "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/IconSlots.kt",
     "agent-swiftui-app/Sources/agent-app/Core/AppIcons.swift",
 }
@@ -227,7 +226,6 @@ GENERATED = {
 AREA_FILES: dict[str, dict[str, list[str]]] = {
     "shell": {
         "flutter": ["agent-flutter/lib/main.dart"],
-        "webui": ["agent-webui/src/App.svelte", "agent-webui/src/lib/Shell.svelte"],
         "compose": ["agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/App.kt"],
         "swiftui": ["agent-swiftui-app/Sources/agent-app/AgentApp.swift"],
     },
@@ -239,15 +237,6 @@ AREA_FILES: dict[str, dict[str, list[str]]] = {
             "agent-flutter/lib/widgets/tool_part.dart",
             "agent-flutter/lib/widgets/tool_icon.dart",
             "agent-flutter/lib/widgets/media_attachment.dart",
-        ],
-        "webui": [
-            "agent-webui/src/lib/pages/Chat.svelte",
-            "agent-webui/src/lib/components/MessageBubble.svelte",
-            "agent-webui/src/lib/components/ToolPartView.svelte",
-            "agent-webui/src/lib/components/MediaAttachment.svelte",
-            "agent-webui/src/lib/components/ui/dialog/dialog.svelte",
-            "agent-webui/src/lib/components/ui/dropdown-menu/dropdown-menu.svelte",
-            "agent-webui/src/lib/components/ui/select/select.svelte",
         ],
         "compose": [
             "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt",
@@ -265,7 +254,6 @@ AREA_FILES: dict[str, dict[str, list[str]]] = {
     },
     "session_list": {
         "flutter": ["agent-flutter/lib/screens/session_list_page.dart", "agent-flutter/lib/widgets/session_row.dart"],
-        "webui": ["agent-webui/src/lib/pages/SessionList.svelte", "agent-webui/src/lib/components/SessionRow.svelte"],
         "compose": ["agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt"],
         "swiftui": ["agent-swiftui-app/Sources/agent-app/Screens/SessionListScreen.swift"],
     },
@@ -274,14 +262,6 @@ AREA_FILES: dict[str, dict[str, list[str]]] = {
             "agent-flutter/lib/screens/config.dart",
             # preset editor (reached from config) — its own file.
             "agent-flutter/lib/screens/preset_form.dart",
-        ],
-        "webui": [
-            "agent-webui/src/lib/pages/Config.svelte",
-            "agent-webui/src/lib/pages/BackendsDetail.svelte",
-            "agent-webui/src/lib/pages/PresetsDetail.svelte",
-            "agent-webui/src/lib/pages/ToolsDetail.svelte",
-            "agent-webui/src/lib/pages/PresetForm.svelte",
-            "agent-webui/src/lib/pages/Mailbox.svelte",
         ],
         "compose": [
             "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt",
@@ -297,15 +277,6 @@ AREA_FILES: dict[str, dict[str, list[str]]] = {
     },
     "providers": {
         "flutter": ["agent-flutter/lib/screens/providers.dart"],
-        "webui": [
-            "agent-webui/src/lib/pages/providers/ProvidersList.svelte",
-            "agent-webui/src/lib/pages/providers/ProviderForm.svelte",
-            "agent-webui/src/lib/pages/providers/GatewayForm.svelte",
-            "agent-webui/src/lib/pages/providers/ProviderModelForm.svelte",
-            "agent-webui/src/lib/pages/providers/GatewayModelForm.svelte",
-            "agent-webui/src/lib/pages/providers/ModelRow.svelte",
-            "agent-webui/src/lib/pages/providers/CapabilityIcon.svelte",
-        ],
         "compose": ["agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt"],
         "swiftui": ["agent-swiftui-app/Sources/agent-app/Screens/ProvidersScreens.swift"],
     },
@@ -345,7 +316,7 @@ AREA_SLOTS: dict[str, set[str]] = {
 }
 
 # --- position table -----------------------------------------------------------
-# WHY: "same slot used by all four clients" is NOT enough — the SAME slot can be
+# WHY: "same slot used by all clients" is NOT enough — the SAME slot can be
 # rendered at different positions on different clients, and the SAME position can
 # use different slots. So each cross-client UI position is pinned here: the exact
 # slot it must render on each client, plus a per-client regex that has to match
@@ -359,77 +330,66 @@ POSITIONS: list[dict] = [
     {"id": "chat.back", "slot": "back", "order": 1, "why": "chat top-bar back",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", r"Icon\(AppIcons\.back, size: 22\)"),
-         "webui": ("agent-webui/src/lib/pages/Chat.svelte", r'aria-label="back"[^\n]*<AppIcons\.back'),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"AppIcons\.back,"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcon\(AppIcons\.back\)"),
      }},
     {"id": "chat.menu", "slot": "more_vertical", "order": 1, "why": "top-bar overflow menu",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", r"icon: const Icon\(AppIcons\.more_vertical, size: 22\)"),
-         "webui": ("agent-webui/src/lib/components/ui/dropdown-menu/dropdown-menu.svelte", r"AppIcons\.more_vertical"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"AppIcons\.more_vertical,"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcon\(AppIcons\.more_vertical\)"),
      }},
     {"id": "chat.composer.stop", "slot": "stop", "order": 1, "why": "composer abort button",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", (r"icon: const Icon\(AppIcons\.stop, size: 20\)", r"icon: AppIcons\.stop,")),
-         "webui": ("agent-webui/src/lib/pages/Chat.svelte", r"AppIcons\.stop class"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"icon = AppIcons\.stop,"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"composerCircle\(icon: AppIcons\.stop"),
      }},
     {"id": "chat.composer.send", "slot": "send", "order": 1, "why": "composer send button",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", (r"icon: const Icon\(AppIcons\.send, size: 20\)", r"icon: AppIcons\.send,")),
-         "webui": ("agent-webui/src/lib/pages/Chat.svelte", r"AppIcons\.send class"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"icon = AppIcons\.send,"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"composerCircle\(icon: AppIcons\.send"),
      }},
     {"id": "chat.composer.empty", "slot": "add", "order": 1, "why": "empty composer → attach sheet",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", (r"Icon\(AppIcons\.add, size: 22\)", r"icon: AppIcons\.add,")),
-         "webui": ("agent-webui/src/lib/pages/Chat.svelte", r"AppIcons\.add class=\"size-5\""),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"icon = AppIcons\.add,"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"composerCircle\(icon: AppIcons\.add"),
      }},
     {"id": "chat.attach.sheet", "slot": "camera|image|attach", "order": 3, "why": "attach sheet rows",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", r"Icon\(AppIcons\.(camera|image|attach)\)"),
-         "webui": ("agent-webui/src/lib/pages/Chat.svelte", r"<AppIcons\.(camera|image|attach) class=\"size-\[22px\]\""),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"AttachSheetRow\(AppIcons\.(camera|image|attach)"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"attachRow\(AppIcons\.(camera|image|attach)"),
      }},
     {"id": "chat.drop.overlay", "slot": "download", "order": 1, "why": "drag-hover overlay glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", r"Icon\(AppIcons\.download, size: 32"),
-         "webui": ("agent-webui/src/lib/pages/Chat.svelte", r"<AppIcons\.download class=\"size-6\""),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"Icon\(AppIcons\.download, contentDescription = null, tint = colors\.primary, modifier = Modifier\.size\(28\.dp\)\)"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcon\(AppIcons\.download\)\.appFont\(\.screenTitle\)"),
      }},
     {"id": "chat.message.actions", "slot": "copy|refresh|edit|undo", "order": 4, "why": "bubble action row",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/message_bubble.dart", r"leading: const Icon\(AppIcons\.(copy|refresh|edit|undo)\)"),
-         "webui": ("agent-webui/src/lib/components/MessageBubble.svelte", r"<AppIcons\.(copy|refresh|edit|undo) class"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"IconAction\(AppIcons\.(copy|refresh|edit|undo)"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"IconAction\(slot: AppIcons\.(copy|refresh|edit|undo)"),
      }},
-    {"id": "chat.image.error", "slot": "image_off", "order": {"flutter": 2, "webui": 2, "compose": 1, "swiftui": 1}, "why": "broken image placeholder",
+    {"id": "chat.image.error", "slot": "image_off", "order": {"flutter": 2, "compose": 1, "swiftui": 1}, "why": "broken image placeholder",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/media_attachment.dart", r"Icon\(AppIcons\.image_off,"),
-         "webui": ("agent-webui/src/lib/components/MediaAttachment.svelte", r"<AppIcons\.image_off"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/MessageFilePart.kt", r"AppIcons\.image_off,"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/MediaAttachment.swift", r"AppIcon\(AppIcons\.image_off\)"),
      }},
     {"id": "chat.audio.glyph", "slot": "music", "order": 1, "why": "audio kind glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/media_attachment.dart", r"MediaKind\.audio => AppIcons\.music,"),
-         "webui": ("agent-webui/src/lib/components/MediaAttachment.svelte", r"<AppIcons\.music class"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/AttachmentTile.kt", r"audio/\"\) == true -> AppIcons\.music"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/MediaAttachment.swift", r"AppIcon\(AppIcons\.music\)"),
      }},
     {"id": "chat.video.glyph", "slot": "film", "order": 1, "why": "video kind glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/media_attachment.dart", r"MediaKind\.video => AppIcons\.film,"),
-         "webui": ("agent-webui/src/lib/components/MediaAttachment.svelte", r"<AppIcons\.film class"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/AttachmentTile.kt", r"video/\"\) == true -> AppIcons\.film"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcons\.film : AppIcons\.file"),
      }},
@@ -437,22 +397,18 @@ POSITIONS: list[dict] = [
     {"id": "sessions.selectall", "slot": "list", "order": 2, "why": "enter select mode + select-all",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/session_list_page.dart", r"AppIcons\.list"),
-         "webui": ("agent-webui/src/lib/pages/SessionList.svelte", r"AppIcons\.list"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt", r"AppIcons\.list,"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/SessionListScreen.swift", r"AppIcon\(AppIcons\.list\)"),
      }},
     {"id": "sessions.row.selected", "slot": "success", "order": 1, "why": "selected row checkbox",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/session_row.dart", r"\? AppIcons\.success"),
-         "webui": ("agent-webui/src/lib/components/SessionRow.svelte", r"<AppIcons\.success class"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt", r"if \(selected\) AppIcons\.success else AppIcons\.circle,"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/SessionListScreen.swift", r"AppIcon\(selected \? AppIcons\.success : AppIcons\.circle\)"),
      }},
     {"id": "sessions.row.unselected", "slot": "circle", "order": 1, "why": "unselected row circle",
-     "waiver": {"webui": "CSS ring (no vector glyph)"},
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/session_row.dart", r": AppIcons\.circle,"),
-         "webui": ("agent-webui/src/lib/components/SessionRow.svelte", r"size-4 rounded-full border border-muted-foreground/50"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt", r"else AppIcons\.circle,"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/SessionListScreen.swift", r": AppIcons\.circle\)"),
      }},
@@ -464,7 +420,6 @@ POSITIONS: list[dict] = [
                 "swiftui": "confirmationDialog is label-only"},
      "clients": {
          "flutter": ("agent-flutter/lib/screens/providers.dart", r"RadioListTile<String>"),
-         "webui": ("agent-webui/src/lib/pages/providers/ProvidersList.svelte", r"<AppIcons\.(target|circle)"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt", 'ActionSheet\\(\\s*title = t\\("defaultModel"\\)'),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ProvidersScreens.swift", 'confirmationDialog\\(t\\("defaultModel"\\)'),
      }},
@@ -472,14 +427,12 @@ POSITIONS: list[dict] = [
      "why": "capability glyph for a model row",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/providers.dart", r"Widget capabilityIcon\("),
-         "webui": ("agent-webui/src/lib/pages/providers/CapabilityIcon.svelte", r"case 'image': return AppIcons\.image"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt", r"fun capabilityIcon\(capability: String\)"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ProvidersScreens.swift", r"func capabilityIcon\(_ capability: String\)"),
      }},
     {"id": "providers.test.flask", "slot": "flask", "order": None, "why": "model test button glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/providers.dart", r": AppIcons\.flask,"),
-         "webui": ("agent-webui/src/lib/pages/providers/ProviderModelForm.svelte", r"<AppIcons\.flask"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt", r"AppIcons\.flask,"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ProvidersScreens.swift", r"AppIcon\(AppIcons\.flask, size: 16\)"),
      }},
@@ -487,21 +440,18 @@ POSITIONS: list[dict] = [
     {"id": "config.drill.chevron", "slot": "chevron_right", "order": None, "why": "config drill-in trailing",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/config.dart", r"trailing: const Icon\(AppIcons\.chevron_right, size: 18\)"),
-         "webui": ("agent-webui/src/lib/pages/Config.svelte", r"<AppIcons\.chevron_right class"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt", r"Icon\(AppIcons\.chevron_right, contentDescription = null"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ConfigScreen.swift", r"AppIcon\(AppIcons\.chevron_right\)\.appFont\(\.meta\)"),
      }},
     {"id": "config.language.globe", "slot": "globe", "order": 1, "why": "UI-language row glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/config.dart", r"AppIcons\.globe, 'language'"),
-         "webui": ("agent-webui/src/lib/pages/Config.svelte", r"icon: AppIcons\.globe"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt", r"Tile\(AppIcons\.globe"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ConfigScreen.swift", r"rowContent\(AppIcons\.globe"),
      }},
     {"id": "config.agentLocale", "slot": "language", "order": 1, "why": "agent-language row glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/config.dart", r"AppIcons\.language,\s*'agentLocale'"),
-         "webui": ("agent-webui/src/lib/pages/Config.svelte", r"icon: AppIcons\.language"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt", r"Tile\(AppIcons\.language"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ConfigScreen.swift", r"rowContent\(AppIcons\.language"),
      }},
@@ -509,7 +459,6 @@ POSITIONS: list[dict] = [
     {"id": "shell.backends.server", "slot": "server", "order": 1, "why": "saved-backend row leading",
      "clients": {
          "flutter": ("agent-flutter/lib/main.dart", r"AppIcons\.server"),
-         "webui": ("agent-webui/src/App.svelte", r"<AppIcons\.server class"),
          "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/App.kt", r"AppIcons\.server"),
          "swiftui": ("agent-swiftui-app/Sources/agent-app/AgentApp.swift", r"AppIcons\.server"),
      }},
@@ -521,31 +470,28 @@ POSITIONS: list[dict] = [
 # used to paper over real drift.
 INTENTIONAL: dict[str, dict[str, str]] = {
     # Dropdown/select checkmarks live inside the platform widget (Flutter
-    # DropdownButtonFormField, SwiftUI Menu) and cannot be replaced; WebUI and
-    # Compose draw their own list rows, hence the shared `check` slot.
+    # DropdownButtonFormField, SwiftUI Menu) and cannot be replaced; Compose
+    # draws its own list rows, hence the shared `check` slot.
     "check": {
         "flutter": "native dropdown checkmark (cannot be replaced)",
         "swiftui": "native Menu checkmark (cannot be replaced)",
     },
     # Inline audio/video playback: Flutter (video_player/audioplayers) and
     # SwiftUI (AVAudioPlayer) draw their own transport controls, so they share
-    # the round play/pause glyph. WebUI uses the HTML5 <audio>/<video> chrome
-    # and Compose's platform actuals are still a fallback card — neither has a
-    # custom button to draw there yet.
+    # the round play/pause glyph. Compose's platform actuals are still a
+    # fallback card with no custom transport button to draw yet.
     "play_round": {
         "compose": "HTML5/native player chrome, no custom transport button",
-        "webui": "HTML5/native player chrome, no custom transport button",
     },
     "pause_round": {
         "compose": "HTML5/native player chrome, no custom transport button",
-        "webui": "HTML5/native player chrome, no custom transport button",
     },
 }
 
 # --- tool-card table ----------------------------------------------------------
 # EVERY tool renders the exact same card: ONE glyph (`tools`) + ONE colour
 # (`primary`). The card must not vary by tool family, so `--check` asserts the
-# fixed glyph expression is present on all four clients AND that the old
+# fixed glyph expression is present on all clients AND that the old
 # per-family icon/colour helpers are gone. (Section icons — braces / file /
 # info / error — are per-SECTION, not per-tool, so they are not covered here.)
 TOOL_GLYPH_SLOT = "tools"
@@ -555,8 +501,6 @@ TOOL_CARD_GLYPH: dict[str, tuple[str, str]] = {
                 "Icon(AppIcons.tools, size: 14, color: colorsOf(context).primary)"),
     "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
                 "Icon(AppIcons.tools, contentDescription = null, tint = colors.primary"),
-    "webui": ("agent-webui/src/lib/components/ToolPartView.svelte",
-              '<AppIcons.tools class="size-3.5 shrink-0 text-primary" />'),
     "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift",
                 "AppIcon(AppIcons.tools, size: 14)"),
 }
@@ -565,18 +509,16 @@ TOOL_CARD_DEAD_HELPERS: dict[str, tuple[str, str]] = {
     "flutter": ("agent-flutter/lib/widgets/tool_icon.dart", ""),
     "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
                 "fun toolGlyph("),
-    "webui": ("agent-webui/src/lib/components/ToolPartView.svelte",
-              "function toolGlyph("),
     "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift",
                 "func toolIconSlot("),
 }
-# Media keys a tool result's `data` may carry as file refs; every client renders
-# those as media/file cards (the "metadata has a file field" exception).
-TOOL_MEDIA_KEYS = ("images", "videos", "audio")
+# The tool-result `data` key carrying produced-file refs; every client renders
+# those as media/file cards (the "metadata has a file field" exception). The
+# generator emits `data.files = [{code,mime,name,bytes}]`.
+TOOL_MEDIA_KEYS = ("files",)
 TOOL_MEDIA_FILES: dict[str, str] = {
     "flutter": "agent-flutter/lib/widgets/tool_part.dart",
     "compose": "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
-    "webui": "agent-webui/src/lib/components/ToolPartView.svelte",
     "swiftui": "agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift",
 }
 
@@ -595,14 +537,13 @@ def snake(name: str) -> str:
 
 
 def resolved() -> dict[str, dict[str, str]]:
-    """Every slot with all five library names filled in."""
+    """Every slot with all library names filled in."""
     out: dict[str, dict[str, str]] = {}
     for slot, row in SLOTS.items():
         ident = row["lucide"]
         out[slot] = {
             "lucide": ident,
             "flutter": row.get("flutter") or snake(ident),
-            "web": row.get("web") or pascal(ident),
             "compose": row.get("compose") or pascal(ident),
             "swift": row.get("swift") or camel(ident),
         }
@@ -621,31 +562,15 @@ def _cache(name: str) -> set[str]:
 def inventories() -> dict[str, set[str]]:
     return {
         "flutter": _cache("flutter-lucide-icons.txt"),
-        "web": _cache("web-icons.txt"),
         "compose": _cache("cih-classes.txt"),
         "swift": _cache("lucide-swift-cases.txt"),
     }
 
 
 def refresh() -> int:
-    """Rebuild the four inventories from the installed dependencies."""
+    """Rebuild the three inventories from the installed dependencies."""
     import json
     import os
-
-    # web — names exported by @lucide/svelte (icons + alias layers)
-    d = ROOT / "agent-webui/node_modules/@lucide/svelte/dist"
-    web: set[str] = set()
-    for probe in ("icons/index.js", "aliases/aliases.js",
-                  "aliases/prefixed.js", "aliases/suffixed.js"):
-        p = d / probe
-        if p.exists():
-            web |= set(re.findall(r"as ([A-Za-z0-9]+) ", p.read_text()))
-    for n in list(web):
-        for suffix in ("Icon", "Lucide"):
-            if n.endswith(suffix) and len(n) > len(suffix):
-                web.add(n[: -len(suffix)])
-    (CACHE / "web-icons.txt").write_text("\n".join(sorted(web)))
-    print(f"web     {len(web)}")
 
     # flutter — identifiers in the installed flutter_lucide package
     import subprocess
@@ -685,42 +610,30 @@ def refresh() -> int:
 
 
 def generated_files(rows: dict[str, dict[str, str]]) -> dict[Path, list[str]]:
-    """The four per-client icon files, as line lists."""
+    """The three per-client icon files, as line lists."""
     """Regenerate the per-client alias files from the table.
 
-    Four generated files, one per client, all produced from ROWS so a slot can
+    Three generated files, one per client, all produced from ROWS so a slot can
     never drift between platforms:
       agent-flutter/lib/icons.dart                          AppIcons.<slot>
-      agent-webui/src/lib/icons.ts                          AppIcons.<slot>
       agent-compose-app/.../ui/IconSlots.kt                 AppIcons.<slot>
       agent-swiftui-app/Sources/agent-app/Core/AppIcons.swift  AppIcons.<slot>
     """
     header = [
         "// GENERATED by tools/icons.py --emit — do not hand-edit.",
-        "// One semantic slot per row; all four clients use the SAME lucide id.",
+        "// One semantic slot per row; all clients use the SAME lucide id.",
     ]
 
     # ---- Flutter ----------------------------------------------------------
     fl = header + [
         "import 'package:flutter_lucide/flutter_lucide.dart';",
         "",
-        "/// Semantic icon slots shared by all four Easy Agent clients.",
+        "/// Semantic icon slots shared by all Easy Agent clients.",
         "abstract final class AppIcons {",
     ]
     for slot, r in sorted(rows.items()):
         fl.append(f"  static const {slot} = LucideIcons.{r['flutter']};")
     fl.append("}")
-
-    # ---- WebUI ------------------------------------------------------------
-    web = header + ["import {"]
-    for slot, r in sorted(rows.items()):
-        web.append(f"  {r['web']},")
-    web += ["} from '@lucide/svelte'", "",
-            "/** Semantic icon slots shared by all four Easy Agent clients. */",
-            "export const AppIcons = {"]
-    for slot, r in sorted(rows.items()):
-        web.append(f"  {slot}: {r['web']},")
-    web += ["} as const"]
 
     # ---- Compose ----------------------------------------------------------
     kt = header + ["package com.agent.app.ui", "",
@@ -729,7 +642,7 @@ def generated_files(rows: dict[str, dict[str, str]]) -> dict[Path, list[str]]:
     for slot, r in sorted(rows.items()):
         kt.append(f"import com.composables.icons.lucide.{r['compose']}")
     kt += ["",
-           "/** Semantic icon slots shared by all four Easy Agent clients (tools/icons.py).",
+           "/** Semantic icon slots shared by all Easy Agent clients (tools/icons.py).",
            " *",
            " *  Compose's Lucide port exposes glyphs as extension properties on the",
            " *  `Lucide` object, so this table adapts the cross-client slot names to",
@@ -744,10 +657,10 @@ def generated_files(rows: dict[str, dict[str, str]]) -> dict[Path, list[str]]:
     # `LucideIcon` init is `(shape:style:size:color:strokeWidth:absoluteStrokeWidth:)`
     # and `LucideIconName` is an enum whose cases are the glyphs.
     sw = header + ["import SwiftUI", "import LucideSwift", "",
-                   "/// Semantic icon slots shared by all four Easy Agent clients.",
+                   "/// Semantic icon slots shared by all Easy Agent clients.",
                    "///",
                    "/// `AppIcon` renders them with the bundled Lucide strokes (2pt, matching",
-                   "/// the Flutter / Compose / WebUI clients), so the same action shows the",
+                   "/// the Flutter / Compose clients), so the same action shows the",
                    "/// same glyph on every platform.",
                    "public enum AppIcons {", "",
                    "    /// The `LucideIconName` for each slot (string lookup, e.g. a tool name).",
@@ -780,7 +693,6 @@ def generated_files(rows: dict[str, dict[str, str]]) -> dict[Path, list[str]]:
 
     return {
         ROOT / "agent-flutter/lib/icons.dart": fl,
-        ROOT / "agent-webui/src/lib/icons.ts": web,
         ROOT / "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/IconSlots.kt": kt,
         ROOT / "agent-swiftui-app/Sources/agent-app/Core/AppIcons.swift": sw,
     }
@@ -797,14 +709,14 @@ def emit() -> int:
 
 def _client_used(client: str, paths: list[str]) -> set[str]:
     """Every `AppIcons.<slot>` the given client sources reference."""
-    ext = {"flutter": ".dart", "webui": ".svelte", "compose": ".kt", "swiftui": ".swift"}[client]
+    ext = {"flutter": ".dart", "compose": ".kt", "swiftui": ".swift"}[client]
     used: set[str] = set()
     for rel in paths:
         p = ROOT / rel
         if not p.exists():
             continue
         text = p.read_text()
-        if not rel.endswith(ext) and not rel.endswith((".ts",)):
+        if not rel.endswith(ext):
             continue
         used |= set(re.findall(r"AppIcons\.([a-z0-9_]+)", text))
     return used
@@ -830,7 +742,7 @@ def _all_used() -> dict[str, set[str]]:
 
 
 def check_position_table() -> int:
-    """Pin every cross-client UI position to one slot on all four clients.
+    """Pin every cross-client UI position to one slot on all clients.
 
     This is the position-level guard `check_positions`' global slot set cannot
     give: for each POSITIONS entry, the client's own source must match the
@@ -849,7 +761,7 @@ def check_position_table() -> int:
         slot = pin["slot"]
         order = pin.get("order")
         waiver = pin.get("waiver", {})
-        for client in ("flutter", "webui", "compose", "swiftui"):
+        for client in ("flutter", "compose", "swiftui"):
             entry = pin["clients"].get(client)
             want_order = order.get(client) if isinstance(order, dict) else order
             if entry is None:
@@ -892,10 +804,10 @@ def check_no_unscanned_icons() -> int:
     scanned: set[str] = {rel for files in AREA_FILES.values()
                          for paths in files.values() for rel in paths}
     rc = 0
-    for client, root in (("flutter", "flutter"), ("webui", "webui"),
-                         ("compose", "compose-app"), ("swiftui", "swiftui-app")):
+    for client, root in (("flutter", "agent-flutter"), ("compose", "agent-compose-app"),
+                         ("swiftui", "agent-swiftui-app")):
         for p in sorted((ROOT / root).rglob("*")):
-            if not p.is_file() or p.suffix not in (".dart", ".svelte", ".ts", ".kt", ".swift"):
+            if not p.is_file() or p.suffix not in (".dart", ".kt", ".swift"):
                 continue
             rel = str(p.relative_to(ROOT))
             if rel in GENERATED or rel in scanned:
@@ -909,7 +821,7 @@ def check_no_unscanned_icons() -> int:
 def check_tool_card() -> int:
     """Every client's tool card must render ONE fixed glyph+tint.
 
-    Asserts the exact glyph expression is present on all four clients and that
+    Asserts the exact glyph expression is present on all clients and that
     the old per-family helpers (`toolGlyph` / `toolIconSlot` / the Flutter
     branch table) are gone.
     """
@@ -950,7 +862,7 @@ def check_tool_card() -> int:
 def check_positions() -> int:
     """Forbid single-client icons.
 
-    Two rules, both aimed at the exact drift the four clients suffered before:
+    Two rules, both aimed at the exact drift the clients suffered before:
       (a) every `AppIcons.<slot>` used by ANY client must be declared in an
           AREA_SLOTS registry — a brand-new glyph cannot appear silently;
       (b) a declared, used slot must be rendered by ALL FOUR clients. A glyph
@@ -962,14 +874,14 @@ def check_positions() -> int:
     registered = slot_area()
     per = _all_used()
     all_used = set().union(*per.values()) if per else set()
-    clients = ("flutter", "webui", "compose", "swiftui")
+    clients = ("flutter", "compose", "swiftui")
 
     # (a) every used slot must be registered
     for slot in sorted(all_used - set(registered)):
         rc = 1
         print(f"FAIL position  `{slot}` is used but not registered in AREA_SLOTS")
 
-    # (b) each registered+used slot must appear on all four clients
+    # (b) each registered+used slot must appear on all clients
     for slot in sorted(all_used & set(registered)):
         waiver = INTENTIONAL.get(slot, {})
         missing = sorted(c for c in clients if slot not in per.get(c, set()) and c not in waiver)
@@ -1005,9 +917,9 @@ def main() -> int:
 
     rows = resolved()
     if "--list" in sys.argv:
-        print(f"{'slot':<18}{'lucide':<24}{'flutter':<24}{'web':<22}{'compose':<22}swift")
+        print(f"{'slot':<18}{'lucide':<24}{'flutter':<24}{'compose':<22}swift")
         for slot, r in sorted(rows.items()):
-            print(f"{slot:<18}{r['lucide']:<24}{r['flutter']:<24}{r['web']:<22}"
+            print(f"{slot:<18}{r['lucide']:<24}{r['flutter']:<24}"
                   f"{r['compose']:<22}{r['swift']}")
         return 0
 
@@ -1018,7 +930,7 @@ def main() -> int:
 
     # 1) every slot must resolve in every library the table names
     for slot, r in sorted(rows.items()):
-        for lib in ("flutter", "web", "compose", "swift"):
+        for lib in ("flutter", "compose", "swift"):
             if inv[lib] and r[lib] not in inv[lib]:
                 rc = 1
                 print(f"FAIL {slot:<18}{lib:<9}{r[lib]}")
@@ -1034,13 +946,13 @@ def main() -> int:
             rc = 1
             print(f"FAIL stale   {path.relative_to(ROOT)} (run --emit)")
 
-    # 3) the tool card must be IDENTICAL on all four clients: ONE glyph
+    # 3) the tool card must be IDENTICAL on all clients: ONE glyph
     #    (`tools`) + ONE colour (`primary`), and no surviving per-family
     #    branching (which would be the exact drift this file exists to stop).
     rc_tool = check_tool_card()
 
     # 4) the position registry — no single-client glyph may exist (this is what
-    #    actually keeps the four ports showing the SAME icon at the SAME spot).
+    #    actually keeps the ports showing the SAME icon at the SAME spot).
     rc_pos = check_positions() | check_position_table() | check_no_unscanned_icons()
 
     print(f"icons: {'OK' if rc == 0 and rc_pos == 0 and rc_tool == 0 else 'FAILED'} "

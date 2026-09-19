@@ -5,17 +5,17 @@ One visual language for every front end: the SAME foreground colour and the
 SAME type treatment (DejaVu Sans Bold), differing ONLY in the background hue
 and the two-letter mark:
 
-    EF = Flutter   (blue)      EW = webui   (violet)
-    EC = Compose   (green)     ES = SwiftUI (amber)
+    EF = Flutter   (blue)      EC = Compose (green)
+    ES = SwiftUI   (amber)
 
-Layout rule (this is what makes the four icons agree visually):
+Layout rule (this is what makes the icons agree visually):
   * the mark is scaled to CONTAIN into a fixed ink box — 0.62 x 0.34 of the
     canvas — so every mark has the same horizontal footprint regardless of how
-    wide its glyphs are ("EW" is much wider than "EF" at equal cap height);
+    wide its glyphs are ("EC" is much wider than "EF" at equal cap height);
   * the ink box is optically centred (crop-to-ink, then centre) so the layout
     does not depend on the font's side bearings;
   * the MASKABLE variant scales that box by 0.80 (Material's safe zone) so an
-    adaptive/maskable launcher does not crop the mark, and all four clients
+    adaptive/maskable launcher does not crop the mark, and all clients
     install at the same apparent size.
 
 Usage:
@@ -43,7 +43,7 @@ FG = (250, 250, 250)
 # are visually the SAME SIZE) — not by width. Fitting by width made the wide
 # "AW" render with a shorter cap height, i.e. it looked smaller than EF/EC/ES.
 CAP_H = 0.30
-# Advance-width ceiling: the widest mark ("EW") must still clear the corners.
+# Advance-width ceiling: the widest mark ("EC") must still clear the corners.
 MAX_ADVANCE = 0.74
 # Maskable content scale (Material safe zone: keep content inside the middle
 # 80% circle). Applied to BOTH axes around the centre.

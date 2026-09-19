@@ -24,7 +24,6 @@ FLUTTER = ROOT / "agent-flutter" / "l10n"
 PORTS = {
     "compose": ROOT / "agent-compose-app/src/commonMain/kotlin/com/agent/app/i18n/I18n.kt",
     "swiftui": ROOT / "agent-swiftui-app/Sources/agent-app/Core/I18n.swift",
-    "webui": ROOT / "agent-webui/src/lib/i18n.svelte.ts",
 }
 PLACEHOLDER = re.compile(r"\{([a-zA-Z0-9_]+)\}")
 
@@ -77,14 +76,6 @@ DEFAULT_LOCALE_TARGETS: dict[str, list[tuple[str, str]]] = {
     # Policy (2026-09): the DEFAULT is FOLLOW SYSTEM — an unset preference
     # resolves to zh for a Chinese system locale and en otherwise, on every
     # client. These pins hold each client's unset-pref path to "system".
-    "webui": [
-        # App boot: explicit zh/en pref, else systemLocale()
-        ("agent-webui/src/App.svelte",
-         r"savedLocalePref === 'zh' \|\| savedLocalePref === 'en' \? savedLocalePref : systemLocale\(\)"),
-        # systemLocale(): any Chinese browser/OS locale → zh, en otherwise
-        ("agent-webui/src/lib/i18n.svelte.ts",
-         r"return langs\.toLowerCase\(\)\.startsWith\('zh'\) \? 'zh' : 'en'"),
-    ],
     "compose": [
         ("agent-compose-app/src/androidMain/kotlin/com/agent/app/platform/Android.platform.kt",
          r'getString\("uiLang", "system"\)'),
@@ -112,7 +103,6 @@ DEFAULT_LOCALE_TARGETS: dict[str, list[tuple[str, str]]] = {
 # A client must not silently switch its default back to English-only or drop
 # the follow-system path. These patterns are the exact regressions seen before.
 LOCALE_ANTI_PATTERNS: list[tuple[str, str]] = [
-    ("agent-webui/src/lib/i18n.svelte.ts", r"let current = \$state<Locale>\('en'\)"),
     ("agent-compose-app/src/commonMain/kotlin/com/agent/app/i18n/I18n.kt",
      r"var lang by mutableStateOf\(Lang\.EN\)"),
     ("agent-swiftui-app/Sources/agent-app/Core/I18n.swift", r"var lang: Lang = \.en"),
@@ -138,7 +128,7 @@ def check_default_locale() -> int:
             rc = 1
             print(f"  FAIL anti-pattern in {rel}: /{pat}/ (default must not be en)")
     if rc == 0:
-        print("  OK — all four clients default to follow-system")
+        print("  OK — all three clients default to follow-system")
     return rc
 
 
@@ -146,7 +136,7 @@ def check_default_locale() -> int:
 # WHY: Svelte (and the other declarative templates) treat a LOWERCASE tag as an
 # unknown HTML element. `<icon .../>` therefore compiles, renders NOTHING, and —
 # crucially — produces no error from the compiler OR from svelte-check. That is
-# exactly how webui's provider list lost every modality glyph (a derived icon
+# exactly how a Svelte web UI once lost every modality glyph (a derived icon
 # component was rendered as `<icon>`). A capitalised tag (`<Glyph/>`) or a
 # member expression (`<AppIcons.x/>`) is a component; a lowercase one is markup.
 #
@@ -171,20 +161,22 @@ feSpotLight feTile feTurbulence foreignObject marker view
 """.split())
 
 TEMPLATE_GLOBS = {
-    "webui": "agent-webui/src/**/*.svelte",
     "compose": "agent-compose-app/src/**/*.kt",
     "swiftui": "agent-swiftui-app/Sources/**/*.swift",
 }
-# Kotlin/Swift use function calls, not tags, so only .svelte is scanned for the
-# lowercase-tag bug; the guard is declared for all clients so a future template
-# language is covered the moment it is added.
-TAG_SCAN_CLIENTS = ("webui",)
+# Kotlin/Swift use function calls, not tags, so no client currently needs the
+# lowercase-tag scan (it applied to the retired Svelte webui). Kept declared so
+# a future template language is covered the moment it is added.
+TAG_SCAN_CLIENTS: tuple[str, ...] = ()
 LOWERCASE_TAG = re.compile(r"<([a-z][a-zA-Z0-9]*)(?=[\s/>])")
 
 
 def check_unknown_elements() -> int:
     rc = 0
     print("\n== lowercase (unknown) element tags (silent no-op) ==")
+    if not TAG_SCAN_CLIENTS:
+        print("  OK   (no template clients to scan)")
+        return rc
     for client in TAG_SCAN_CLIENTS:
         hits: list[str] = []
         for p in sorted(ROOT.glob(TEMPLATE_GLOBS[client])):
@@ -214,21 +206,20 @@ def check_unknown_elements() -> int:
 
 
 # --- i18n usage guard ---------------------------------------------------------
-# WHY: the key tables are mirrored four ways by hand, and keys outlive their
+# WHY: the key tables are mirrored across the clients by hand, and keys outlive their
 # last call site (deleteSessionConfirm vs deleteSessionBody, editMessage
 # defined in swiftui months before its dialog existed). A key referenced by
 # ZERO clients is dead weight in three dictionaries; a key referenced by only
 # SOME clients usually means a feature gap or a dynamically-built key.
 #
-# FAIL: unused in ALL four clients (dead key — delete it from every table).
+# FAIL: unused in ALL clients (dead key — delete it from every table).
 # WARN: unused in some clients (verify it is not a missing feature).
 
 USAGE_SCAN: dict[str, tuple[str, list[str]]] = {
     # (root, excluded definition files) — search every source file for the key
-    # as a quoted literal (ts/kt/swift call sites are t("key")) or, in flutter,
+    # as a quoted literal (kt/swift call sites are t("key")) or, in flutter,
     # as a `l10n.key` / `I18n.now.key` accessor reference.
     "flutter": ("agent-flutter/lib", ["l10n/generated"]),
-    "webui": ("agent-webui/src", ["i18n.svelte.ts"]),
     "compose": ("agent-compose-app/src", ["i18n/I18n.kt"]),
     "swiftui": ("agent-swiftui-app/Sources", ["Core/I18n.swift"]),
 }
@@ -257,13 +248,13 @@ def check_i18n_usage() -> int:
     rc = 0
     keys = sorted(flutter_keys("en"))
     cache: dict[str, str] = {}
-    print(f"\n== i18n key usage ({len(keys)} keys x 4 clients) ==")
+    print(f"\n== i18n key usage ({len(keys)} keys x 3 clients) ==")
     dead: list[str] = []
     partial: list[tuple[str, list[str]]] = []
     for k in keys:
-        unused = [c for c in ("flutter", "webui", "compose", "swiftui")
+        unused = [c for c in ("flutter", "compose", "swiftui")
                   if not _client_uses_key(c, k, cache)]
-        if len(unused) == 4:
+        if len(unused) == 3:
             dead.append(k)
         elif unused:
             partial.append((k, unused))

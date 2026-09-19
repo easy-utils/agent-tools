@@ -2,13 +2,13 @@
 """Chat-avatar (honeycomb identicon) parity guard.
 
 WHY: the session-row avatar is generated client-side from the session id, so
-four independent implementations of the SAME algorithm must agree bit-for-bit.
+independent implementations of the SAME algorithm must agree bit-for-bit.
 They once did not: Compose's `keyOf` was written with an escaped ``\\$`` (a
 string literal, not interpolation), collapsing every mirror lookup to one key
-and giving Compose a completely different pattern from the other three.
+and giving Compose a completely different pattern from the other clients.
 
 The algorithm is small and deterministic, so this file re-implements it exactly
-once — as the four clients do (FNV-1a over the seed masked to 31 bits per step,
+once — as the clients do (FNV-1a over the seed masked to 31 bits per step,
 then the same `mix` finaliser, the same pointy-top lattice, the same mirror
 pairing with a rounded 1e6 coordinate key) — and asserts a set of fixed seeds
 produce the documented hue + on-cell pattern. `--vectors` prints them so the
@@ -39,7 +39,6 @@ HEX_SIZE = 0.10
 # The client files that must each contain the avatar implementation.
 AVATAR_FILES = {
     "flutter": "agent-flutter/lib/widgets/chat_avatar.dart",
-    "webui": "agent-webui/src/lib/identicon.ts",
     "compose": "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatAvatar.kt",
     "swiftui": "agent-swiftui-app/Sources/agent-app/Core/ChatAvatar.swift",
 }
@@ -48,7 +47,6 @@ AVATAR_FILES = {
 # (escaped interpolation) or a different rounding is the drift this catches.
 KEY_EXPR: dict[str, str] = {
     "flutter": r"toStringAsFixed\(6\)",
-    "webui": r"toFixed\(0\)",
     "compose": r'toLong\(\)',  # NOT `\${...}` — must be a real interpolation
     "swiftui": r"rounded\(\)",
 }
@@ -60,7 +58,6 @@ KEY_EXPR: dict[str, str] = {
 # Flutter/WebUI/SwiftUI but a pale one on Compose, so the glyph colour differed.
 CHANNEL_QUANT_EXPR: dict[str, str] = {
     "flutter": r"\.toColor\(\)",
-    "webui": r"Math\.round\(",
     "compose": r"roundToInt\(\)",
     "swiftui": r"\.rounded\(\)\s*/\s*255",
 }
@@ -70,7 +67,7 @@ SEEDS = [
     "9f3a1b2c3d4e5f60", "sbx-abc", "cafebabe01234567", "org/repo/main",
 ]
 
-# Golden (hue, bg, fg) per seed — the exact 8-bit channels all four clients must
+# Golden (hue, bg, fg) per seed — the exact 8-bit channels all three clients must
 # produce. bg/fg are (r,g,b) 0..255.
 COLOR_VECTORS: dict[str, tuple[int, tuple[int, int, int], tuple[int, int, int]]] = {
     "e2e-gwchat": (316, (196, 49, 157), (50, 12, 39)),
@@ -127,14 +124,14 @@ def cells() -> list[tuple[float, float]]:
 
 
 def key(x: float, y: float) -> str:
-    # All four clients round the 1e6-scaled coordinates to an integer; the
+    # All three clients round the 1e6-scaled coordinates to an integer; the
     # exact formatter differs but the resulting key is identical (verified: the
     # nearest lattice coordinate is > 0.04 from a .5 rounding boundary).
     return f"{round(x * 1_000_000)}|{round(y * 1_000_000)}"
 
 
 def pattern(seed: str) -> list[bool]:
-    """Mirror-symmetric on/off bits, exactly as the four clients compute them."""
+    """Mirror-symmetric on/off bits, exactly as the three clients compute them."""
     cs = cells()
     by_coord = {key(-x, y): i for i, (x, y) in enumerate(cs)}
     on = [False] * len(cs)
@@ -193,7 +190,7 @@ def _contrast(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
 
 
 def spec(seed: str) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
-    """The (bg, fg) 8-bit colours all four clients must render for [seed]."""
+    """The (bg, fg) 8-bit colours all three clients must render for [seed]."""
     h = hue(seed)
     bg = _quant(_hsl_raw(h, 0.60, 0.48))
     best = bg
@@ -264,7 +261,7 @@ def main() -> int:
     print("== avatar colours (golden, 8-bit) ==")
     for s, (h, bg, fg) in COLOR_VECTORS.items():
         print(f"  {s:<20}hue={h:<4}bg={bg} fg={fg}")
-    print(f"avatars: {'OK' if rc == 0 else 'FAILED'} ({len(SEEDS)} seeds, 4 clients)")
+    print(f"avatars: {'OK' if rc == 0 else 'FAILED'} ({len(SEEDS)} seeds, 3 clients)")
     return rc
 
 
