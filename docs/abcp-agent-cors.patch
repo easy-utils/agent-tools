@@ -1,0 +1,28 @@
+diff --git a/packages/server/src/index.ts b/packages/server/src/index.ts
+index 425d71b..237b74b 100644
+--- a/packages/server/src/index.ts
++++ b/packages/server/src/index.ts
+@@ -438,11 +438,22 @@ async function main(): Promise<void> {
+   const corsHeaders: Record<string, string> = {
+     'Access-Control-Allow-Origin': corsOrigin,
+     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
++    // `connect-accept-encoding` gates server-stream calls in the browser: the
++    // easy-rpc / connect-web clients set it on every streaming POST, so
++    // omitting it makes the preflight fail and the UI never opens a stream.
++    // `connect-content-encoding` covers request-side gzip for the same reason.
+     'Access-Control-Allow-Headers':
+       'content-type, connect-protocol-version, connect-timeout-ms, ' +
++      'connect-accept-encoding, connect-content-encoding, ' +
+       'grpc-timeout, x-grpc-web, x-user-agent, authorization',
++    // Connect error code/message travel in connect-code/connect-error headers;
++    // without exposing them a browser sees only a bare 4xx. `trailer-*` (unary
++    // trailing metadata) cannot be enumerated, so `*` is added for these
++    // non-credentialed (Bearer, not cookies) browser calls.
+     'Access-Control-Expose-Headers':
+-      'grpc-status, grpc-message, connect-protocol-version',
++      'grpc-status, grpc-message, connect-protocol-version, ' +
++      'connect-code, connect-error, ' +
++      'connect-accept-encoding, connect-content-encoding, *',
+     'Access-Control-Max-Age': '86400',
+     Vary: 'Origin',
+   }
