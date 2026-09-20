@@ -32,7 +32,7 @@ import urllib.error
 import urllib.request
 
 BASE = os.environ.get(
-    "AGENT_BASE", "https://standalone-agent.temp.10.199.64.20.nip.io"
+    "AGENT_BASE", "https://agent.agent.10.199.64.20.nip.io"
 ).rstrip("/")
 
 GW_DEV004 = "https://ai-gateway-dev004.develop.10.199.64.20.nip.io/v4/ai"

@@ -9,7 +9,7 @@ modality against the new gateway, with the NEW model ids from its `/v1/models`.
     python3 tools/register-gateway.py --dry-run  # print the calls only
 
 Config (env-overridable; no defaults for the secrets — this checkout is public):
-    AGENT_BASE   default https://standalone-agent.temp.10.199.64.20.nip.io
+    AGENT_BASE   default https://agent.agent.10.199.64.20.nip.io
     AGENT_TOKEN  required
     GW_BASE      default https://api-gray.xueersi.com/ai-multimodal-gateway/v4/ai
     GW_KEY       required
@@ -25,7 +25,7 @@ import urllib.error
 import urllib.request
 
 BASE = os.environ.get(
-    "AGENT_BASE", "https://standalone-agent.temp.10.199.64.20.nip.io"
+    "AGENT_BASE", "https://agent.agent.10.199.64.20.nip.io"
 ).rstrip("/")
 TOKEN = os.environ.get("AGENT_TOKEN", "")
 GW_BASE = os.environ.get(

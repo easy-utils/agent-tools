@@ -26,10 +26,14 @@ from pathlib import Path
 
 ROOT = Path(_os.environ.get('AGENT_APPS_ROOT') or Path(__file__).resolve().parent.parent)
 
-# The single canonical default gateway. The ingress moved; older checkouts kept
-# `standalone-agent.temp...`, which now answers 502.
-DEFAULT_HOST = "agent.temp.10.199.64.20.nip.io"
-STALE_HOST = "standalone-agent.temp.10.199.64.20.nip.io"
+# The single canonical default gateway. The ingress moved twice; older
+# checkouts kept `standalone-agent.temp...` / `agent.temp...`, both of which
+# now answer 502.
+DEFAULT_HOST = "agent.agent.10.199.64.20.nip.io"
+STALE_HOSTES = (
+    "standalone-agent.temp.10.199.64.20.nip.io",
+    "agent.temp.10.199.64.20.nip.io",
+)
 
 APP_NAME = "Easy Agent"
 
@@ -40,7 +44,7 @@ CLIENTS: dict[str, dict] = {
     "flutter": {
         "repo": "agent-flutter",
         "title": [("l10n/app_en.arb", r'"appTitle"\s*:\s*"Easy Agent"')],
-        "base": [],
+        "base": ["lib/prefs.dart"],
         "deps": ["pubspec.yaml"],
     },
     "compose": {
@@ -127,9 +131,10 @@ def check() -> int:
                 rc = 1
                 continue
             text = p.read_text(errors="ignore")
-            if STALE_HOST in text:
-                print(f"FAIL {client:<12}stale host {STALE_HOST} in {rel}")
-                rc = 1
+            for stale in STALE_HOSTES:
+                if stale in text:
+                    print(f"FAIL {client:<12}stale host {stale} in {rel}")
+                    rc = 1
             if DEFAULT_HOST not in text:
                 print(f"FAIL {client:<12}canonical host absent from {rel}")
                 rc = 1
