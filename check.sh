@@ -40,12 +40,12 @@ if [ "$FULL" = 1 ]; then
   errs=$(cd "$APPS/agent-flutter" && flutter analyze 2>&1 | grep -c "error •")
   if [ "$errs" = 0 ]; then echo "flutter: 0 errors"; else echo "flutter: $errs errors"; rc=1; fi
 
-  run bash -c "cd '$APPS/agent-compose-app' && JAVA_HOME=\${JAVA_HOME:-/opt/tools/mise/installs/java/17.0.2} gradle :compileKotlinDesktop :compileKotlinWasmJs -q"
+  run bash -c "cd '$APPS/agent-compose' && JAVA_HOME=\${JAVA_HOME:-/opt/tools/mise/installs/java/17.0.2} gradle :compileKotlinDesktop :compileKotlinWasmJs -q"
 
   # swiftui: swiftc -parse over every source (find, not ** glob).
   echo
   echo "===== swiftui swiftc -parse ====="
-  if (cd "$APPS/agent-swiftui-app" && find Sources -name '*.swift' -print0 \
+  if (cd "$APPS/agent-swiftui" && find Sources -name '*.swift' -print0 \
         | xargs -0 swiftc -parse) ; then
     echo "swiftui: parse OK"
   else

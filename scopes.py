@@ -27,8 +27,8 @@ ROOT = Path(_os.environ.get('AGENT_APPS_ROOT') or Path(__file__).resolve().paren
 
 SCOPE_FILES = {
     "flutter": "agent-flutter/lib/scope.dart",
-    "compose": "agent-compose-app/src/commonMain/kotlin/com/agent/app/Scope.kt",
-    "swiftui": "agent-swiftui-app/Sources/agent-app/Core/Scope.swift",
+    "compose": "agent-compose/src/commonMain/kotlin/com/agent/app/Scope.kt",
+    "swiftui": "agent-swiftui/Sources/agent-app/Core/Scope.swift",
 }
 # Each client's hash initializer + mask (the shared shape; only the syntax
 # differs).

@@ -48,7 +48,7 @@ CLIENTS: dict[str, dict] = {
         "deps": ["pubspec.yaml"],
     },
     "compose": {
-        "repo": "agent-compose-app",
+        "repo": "agent-compose",
         "title": [("build.gradle.kts", r'packageName\s*=\s*"Easy Agent"')],
         "base": [
             "src/androidMain/kotlin/com/agent/app/platform/Android.platform.kt",
@@ -58,7 +58,7 @@ CLIENTS: dict[str, dict] = {
         "deps": ["build.gradle.kts", "settings.gradle.kts"],
     },
     "swiftui": {
-        "repo": "agent-swiftui-app",
+        "repo": "agent-swiftui",
         "title": [("tool/Info-ios.plist", r"<string>Easy Agent</string>")],
         "base": ["Sources/agent-app/Core/Prefs.swift"],
         "deps": ["Package.swift"],

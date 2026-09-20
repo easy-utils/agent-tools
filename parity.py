@@ -22,8 +22,8 @@ import os as _os
 ROOT = Path(_os.environ.get('AGENT_APPS_ROOT') or Path(__file__).resolve().parent.parent)
 FLUTTER = ROOT / "agent-flutter" / "l10n"
 PORTS = {
-    "compose": ROOT / "agent-compose-app/src/commonMain/kotlin/com/agent/app/i18n/I18n.kt",
-    "swiftui": ROOT / "agent-swiftui-app/Sources/agent-app/Core/I18n.swift",
+    "compose": ROOT / "agent-compose/src/commonMain/kotlin/com/agent/app/i18n/I18n.kt",
+    "swiftui": ROOT / "agent-swiftui/Sources/agent-app/Core/I18n.swift",
 }
 PLACEHOLDER = re.compile(r"\{([a-zA-Z0-9_]+)\}")
 
@@ -77,17 +77,17 @@ DEFAULT_LOCALE_TARGETS: dict[str, list[tuple[str, str]]] = {
     # resolves to zh for a Chinese system locale and en otherwise, on every
     # client. These pins hold each client's unset-pref path to "system".
     "compose": [
-        ("agent-compose-app/src/androidMain/kotlin/com/agent/app/platform/Android.platform.kt",
+        ("agent-compose/src/androidMain/kotlin/com/agent/app/platform/Android.platform.kt",
          r'getString\("uiLang", "system"\)'),
-        ("agent-compose-app/src/desktopMain/kotlin/com/agent/app/platform/Desktop.platform.kt",
+        ("agent-compose/src/desktopMain/kotlin/com/agent/app/platform/Desktop.platform.kt",
          r'get\("uiLang", "system"\)'),
-        ("agent-compose-app/src/wasmJsMain/kotlin/com/agent/app/platform/Web.platform.kt",
+        ("agent-compose/src/wasmJsMain/kotlin/com/agent/app/platform/Web.platform.kt",
          r'jsLocalGet\("agent\.uiLang"\) \?: "system"'),
     ],
     "swiftui": [
-        ("agent-swiftui-app/Sources/agent-app/Core/Prefs.swift",
+        ("agent-swiftui/Sources/agent-app/Core/Prefs.swift",
          r'd\.string\(forKey: "agent\.uiLang"\) \?\? "system"'),
-        ("agent-swiftui-app/Sources/agent-app/Core/I18n.swift",
+        ("agent-swiftui/Sources/agent-app/Core/I18n.swift",
          r'return Prefs\.systemLangZh \? \.zh : \.en'),
     ],
     "flutter": [
@@ -103,9 +103,9 @@ DEFAULT_LOCALE_TARGETS: dict[str, list[tuple[str, str]]] = {
 # A client must not silently switch its default back to English-only or drop
 # the follow-system path. These patterns are the exact regressions seen before.
 LOCALE_ANTI_PATTERNS: list[tuple[str, str]] = [
-    ("agent-compose-app/src/commonMain/kotlin/com/agent/app/i18n/I18n.kt",
+    ("agent-compose/src/commonMain/kotlin/com/agent/app/i18n/I18n.kt",
      r"var lang by mutableStateOf\(Lang\.EN\)"),
-    ("agent-swiftui-app/Sources/agent-app/Core/I18n.swift", r"var lang: Lang = \.en"),
+    ("agent-swiftui/Sources/agent-app/Core/I18n.swift", r"var lang: Lang = \.en"),
 ]
 
 
@@ -161,8 +161,8 @@ feSpotLight feTile feTurbulence foreignObject marker view
 """.split())
 
 TEMPLATE_GLOBS = {
-    "compose": "agent-compose-app/src/**/*.kt",
-    "swiftui": "agent-swiftui-app/Sources/**/*.swift",
+    "compose": "agent-compose/src/**/*.kt",
+    "swiftui": "agent-swiftui/Sources/**/*.swift",
 }
 # Kotlin/Swift use function calls, not tags, so no client currently needs the
 # lowercase-tag scan (it applied to the retired Svelte webui). Kept declared so
@@ -220,8 +220,8 @@ USAGE_SCAN: dict[str, tuple[str, list[str]]] = {
     # as a quoted literal (kt/swift call sites are t("key")) or, in flutter,
     # as a `l10n.key` / `I18n.now.key` accessor reference.
     "flutter": ("agent-flutter/lib", ["l10n/generated"]),
-    "compose": ("agent-compose-app/src", ["i18n/I18n.kt"]),
-    "swiftui": ("agent-swiftui-app/Sources", ["Core/I18n.swift"]),
+    "compose": ("agent-compose/src", ["i18n/I18n.kt"]),
+    "swiftui": ("agent-swiftui/Sources", ["Core/I18n.swift"]),
 }
 
 

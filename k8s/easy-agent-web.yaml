@@ -3,7 +3,7 @@
 # tool/build-web-image.sh (forgejo OCI, namespace easylab):
 #
 #   agent-flutter  -> agent-flutter/tool/build-web-image.sh   (Dockerfile.web)
-#   agent-compose  -> agent-compose-app/tool/build-web-image.sh (Dockerfile.web)
+#   agent-compose  -> agent-compose/tool/build-web-image.sh (Dockerfile.web)
 #
 # Replace the image tags with the freshly built ones (or `kubectl -n temp set
 # image`) then apply. All serve on 8080 with /healthz; the compose image also

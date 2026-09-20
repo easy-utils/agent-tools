@@ -39,8 +39,8 @@ HEX_SIZE = 0.10
 # The client files that must each contain the avatar implementation.
 AVATAR_FILES = {
     "flutter": "agent-flutter/lib/widgets/chat_avatar.dart",
-    "compose": "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatAvatar.kt",
-    "swiftui": "agent-swiftui-app/Sources/agent-app/Core/ChatAvatar.swift",
+    "compose": "agent-compose/src/commonMain/kotlin/com/agent/app/ui/ChatAvatar.kt",
+    "swiftui": "agent-swiftui/Sources/agent-app/Core/ChatAvatar.swift",
 }
 
 # The exact mirror-key expression each client must use. A literal `\$` in Kotlin

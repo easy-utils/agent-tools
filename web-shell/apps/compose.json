@@ -1,5 +1,5 @@
 {
-  "dir": "agent-compose-app",
+  "dir": "agent-compose",
   "index_html": "src/wasmJsMain/resources/index.html",
   "manifest_path": "src/wasmJsMain/resources/manifest.webmanifest",
   "manifest_href": "manifest.webmanifest",

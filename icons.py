@@ -217,8 +217,8 @@ SLOTS: dict[str, dict[str, str]] = {
 # The three generated per-client alias files (excluded from usage scanning).
 GENERATED = {
     "agent-flutter/lib/icons.dart",
-    "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/IconSlots.kt",
-    "agent-swiftui-app/Sources/agent-app/Core/AppIcons.swift",
+    "agent-compose/src/commonMain/kotlin/com/agent/app/ui/IconSlots.kt",
+    "agent-swiftui/Sources/agent-app/Core/AppIcons.swift",
 }
 
 # area -> {client -> [source files]} — only used to bucket a slot by feature so
@@ -226,8 +226,8 @@ GENERATED = {
 AREA_FILES: dict[str, dict[str, list[str]]] = {
     "shell": {
         "flutter": ["agent-flutter/lib/main.dart"],
-        "compose": ["agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/App.kt"],
-        "swiftui": ["agent-swiftui-app/Sources/agent-app/AgentApp.swift"],
+        "compose": ["agent-compose/src/commonMain/kotlin/com/agent/app/ui/App.kt"],
+        "swiftui": ["agent-swiftui/Sources/agent-app/AgentApp.swift"],
     },
     "chat": {
         "flutter": [
@@ -239,23 +239,23 @@ AREA_FILES: dict[str, dict[str, list[str]]] = {
             "agent-flutter/lib/widgets/media_attachment.dart",
         ],
         "compose": [
-            "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt",
-            "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
-            "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/MediaCommon.kt",
-            "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/MediaViewer.kt",
-            "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/MessageFilePart.kt",
-            "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/AttachmentTile.kt",
-            "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/Theme.kt",
+            "agent-compose/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt",
+            "agent-compose/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
+            "agent-compose/src/commonMain/kotlin/com/agent/app/ui/MediaCommon.kt",
+            "agent-compose/src/commonMain/kotlin/com/agent/app/ui/MediaViewer.kt",
+            "agent-compose/src/commonMain/kotlin/com/agent/app/ui/MessageFilePart.kt",
+            "agent-compose/src/commonMain/kotlin/com/agent/app/ui/AttachmentTile.kt",
+            "agent-compose/src/commonMain/kotlin/com/agent/app/ui/Theme.kt",
         ],
         "swiftui": [
-            "agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift",
-            "agent-swiftui-app/Sources/agent-app/Screens/MediaAttachment.swift",
+            "agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift",
+            "agent-swiftui/Sources/agent-app/Screens/MediaAttachment.swift",
         ],
     },
     "session_list": {
         "flutter": ["agent-flutter/lib/screens/session_list_page.dart", "agent-flutter/lib/widgets/session_row.dart"],
-        "compose": ["agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt"],
-        "swiftui": ["agent-swiftui-app/Sources/agent-app/Screens/SessionListScreen.swift"],
+        "compose": ["agent-compose/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt"],
+        "swiftui": ["agent-swiftui/Sources/agent-app/Screens/SessionListScreen.swift"],
     },
     "config": {
         "flutter": [
@@ -264,21 +264,21 @@ AREA_FILES: dict[str, dict[str, list[str]]] = {
             "agent-flutter/lib/screens/preset_form.dart",
         ],
         "compose": [
-            "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt",
-            "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/MailboxScreen.kt",
+            "agent-compose/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt",
+            "agent-compose/src/commonMain/kotlin/com/agent/app/ui/MailboxScreen.kt",
         ],
         "swiftui": [
-            "agent-swiftui-app/Sources/agent-app/Screens/ConfigScreen.swift",
-            "agent-swiftui-app/Sources/agent-app/Screens/MailboxScreen.swift",
-            "agent-swiftui-app/Sources/agent-app/Screens/PresetFormScreen.swift",
+            "agent-swiftui/Sources/agent-app/Screens/ConfigScreen.swift",
+            "agent-swiftui/Sources/agent-app/Screens/MailboxScreen.swift",
+            "agent-swiftui/Sources/agent-app/Screens/PresetFormScreen.swift",
             # shared UI primitives (AppSelect/AppField) used across screens.
-            "agent-swiftui-app/Sources/agent-app/Core/Theme.swift",
+            "agent-swiftui/Sources/agent-app/Core/Theme.swift",
         ],
     },
     "providers": {
         "flutter": ["agent-flutter/lib/screens/providers.dart"],
-        "compose": ["agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt"],
-        "swiftui": ["agent-swiftui-app/Sources/agent-app/Screens/ProvidersScreens.swift"],
+        "compose": ["agent-compose/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt"],
+        "swiftui": ["agent-swiftui/Sources/agent-app/Screens/ProvidersScreens.swift"],
     },
 }
 
@@ -330,87 +330,87 @@ POSITIONS: list[dict] = [
     {"id": "chat.back", "slot": "back", "order": 1, "why": "chat top-bar back",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", r"Icon\(AppIcons\.back, size: 22\)"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"AppIcons\.back,"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcon\(AppIcons\.back\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"AppIcons\.back,"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcon\(AppIcons\.back\)"),
      }},
     {"id": "chat.menu", "slot": "more_vertical", "order": 1, "why": "top-bar overflow menu",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", r"icon: const Icon\(AppIcons\.more_vertical, size: 22\)"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"AppIcons\.more_vertical,"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcon\(AppIcons\.more_vertical\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"AppIcons\.more_vertical,"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcon\(AppIcons\.more_vertical\)"),
      }},
     {"id": "chat.composer.stop", "slot": "stop", "order": 1, "why": "composer abort button",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", (r"icon: const Icon\(AppIcons\.stop, size: 20\)", r"icon: AppIcons\.stop,")),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"icon = AppIcons\.stop,"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"composerCircle\(icon: AppIcons\.stop"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"icon = AppIcons\.stop,"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift", r"composerCircle\(icon: AppIcons\.stop"),
      }},
     {"id": "chat.composer.send", "slot": "send", "order": 1, "why": "composer send button",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", (r"icon: const Icon\(AppIcons\.send, size: 20\)", r"icon: AppIcons\.send,")),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"icon = AppIcons\.send,"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"composerCircle\(icon: AppIcons\.send"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"icon = AppIcons\.send,"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift", r"composerCircle\(icon: AppIcons\.send"),
      }},
     {"id": "chat.composer.empty", "slot": "add", "order": 1, "why": "empty composer → attach sheet",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", (r"Icon\(AppIcons\.add, size: 22\)", r"icon: AppIcons\.add,")),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"icon = AppIcons\.add,"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"composerCircle\(icon: AppIcons\.add"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"icon = AppIcons\.add,"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift", r"composerCircle\(icon: AppIcons\.add"),
      }},
     {"id": "chat.attach.sheet", "slot": "camera|image|attach", "order": 3, "why": "attach sheet rows",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", r"Icon\(AppIcons\.(camera|image|attach)\)"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"AttachSheetRow\(AppIcons\.(camera|image|attach)"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"attachRow\(AppIcons\.(camera|image|attach)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"AttachSheetRow\(AppIcons\.(camera|image|attach)"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift", r"attachRow\(AppIcons\.(camera|image|attach)"),
      }},
     {"id": "chat.drop.overlay", "slot": "download", "order": 1, "why": "drag-hover overlay glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/chat.dart", r"Icon\(AppIcons\.download, size: 32"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"Icon\(AppIcons\.download, contentDescription = null, tint = colors\.primary, modifier = Modifier\.size\(28\.dp\)\)"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcon\(AppIcons\.download\)\.appFont\(\.screenTitle\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"Icon\(AppIcons\.download, contentDescription = null, tint = colors\.primary, modifier = Modifier\.size\(28\.dp\)\)"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcon\(AppIcons\.download\)\.appFont\(\.screenTitle\)"),
      }},
     {"id": "chat.message.actions", "slot": "copy|refresh|edit|undo", "order": 4, "why": "bubble action row",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/message_bubble.dart", r"leading: const Icon\(AppIcons\.(copy|refresh|edit|undo)\)"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"IconAction\(AppIcons\.(copy|refresh|edit|undo)"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"IconAction\(slot: AppIcons\.(copy|refresh|edit|undo)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ChatScreen.kt", r"IconAction\(AppIcons\.(copy|refresh|edit|undo)"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift", r"IconAction\(slot: AppIcons\.(copy|refresh|edit|undo)"),
      }},
     {"id": "chat.image.error", "slot": "image_off", "order": {"flutter": 2, "compose": 1, "swiftui": 1}, "why": "broken image placeholder",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/media_attachment.dart", r"Icon\(AppIcons\.image_off,"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/MessageFilePart.kt", r"AppIcons\.image_off,"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/MediaAttachment.swift", r"AppIcon\(AppIcons\.image_off\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/MessageFilePart.kt", r"AppIcons\.image_off,"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/MediaAttachment.swift", r"AppIcon\(AppIcons\.image_off\)"),
      }},
     {"id": "chat.audio.glyph", "slot": "music", "order": 1, "why": "audio kind glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/media_attachment.dart", r"MediaKind\.audio => AppIcons\.music,"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/AttachmentTile.kt", r"audio/\"\) == true -> AppIcons\.music"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/MediaAttachment.swift", r"AppIcon\(AppIcons\.music\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/AttachmentTile.kt", r"audio/\"\) == true -> AppIcons\.music"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/MediaAttachment.swift", r"AppIcon\(AppIcons\.music\)"),
      }},
     {"id": "chat.video.glyph", "slot": "film", "order": 1, "why": "video kind glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/media_attachment.dart", r"MediaKind\.video => AppIcons\.film,"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/AttachmentTile.kt", r"video/\"\) == true -> AppIcons\.film"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcons\.film : AppIcons\.file"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/AttachmentTile.kt", r"video/\"\) == true -> AppIcons\.film"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift", r"AppIcons\.film : AppIcons\.file"),
      }},
     # ---- session list ----
     {"id": "sessions.selectall", "slot": "list", "order": 2, "why": "enter select mode + select-all",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/session_list_page.dart", r"AppIcons\.list"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt", r"AppIcons\.list,"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/SessionListScreen.swift", r"AppIcon\(AppIcons\.list\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt", r"AppIcons\.list,"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/SessionListScreen.swift", r"AppIcon\(AppIcons\.list\)"),
      }},
     {"id": "sessions.row.selected", "slot": "success", "order": 1, "why": "selected row checkbox",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/session_row.dart", r"\? AppIcons\.success"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt", r"if \(selected\) AppIcons\.success else AppIcons\.circle,"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/SessionListScreen.swift", r"AppIcon\(selected \? AppIcons\.success : AppIcons\.circle\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt", r"if \(selected\) AppIcons\.success else AppIcons\.circle,"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/SessionListScreen.swift", r"AppIcon\(selected \? AppIcons\.success : AppIcons\.circle\)"),
      }},
     {"id": "sessions.row.unselected", "slot": "circle", "order": 1, "why": "unselected row circle",
      "clients": {
          "flutter": ("agent-flutter/lib/widgets/session_row.dart", r": AppIcons\.circle,"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt", r"else AppIcons\.circle,"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/SessionListScreen.swift", r": AppIcons\.circle\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/SessionListScreen.kt", r"else AppIcons\.circle,"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/SessionListScreen.swift", r": AppIcons\.circle\)"),
      }},
     # ---- providers ----
     {"id": "providers.default.radio", "slot": "target|circle", "order": None,
@@ -420,47 +420,47 @@ POSITIONS: list[dict] = [
                 "swiftui": "confirmationDialog is label-only"},
      "clients": {
          "flutter": ("agent-flutter/lib/screens/providers.dart", r"RadioListTile<String>"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt", 'ActionSheet\\(\\s*title = t\\("defaultModel"\\)'),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ProvidersScreens.swift", 'confirmationDialog\\(t\\("defaultModel"\\)'),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt", 'ActionSheet\\(\\s*title = t\\("defaultModel"\\)'),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ProvidersScreens.swift", 'confirmationDialog\\(t\\("defaultModel"\\)'),
      }},
     {"id": "providers.model.capability", "slot": "image|video|audio|mic_vocal|scatter|grip|bolt|chat", "order": 1,
      "why": "capability glyph for a model row",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/providers.dart", r"Widget capabilityIcon\("),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt", r"fun capabilityIcon\(capability: String\)"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ProvidersScreens.swift", r"func capabilityIcon\(_ capability: String\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt", r"fun capabilityIcon\(capability: String\)"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ProvidersScreens.swift", r"func capabilityIcon\(_ capability: String\)"),
      }},
     {"id": "providers.test.flask", "slot": "flask", "order": None, "why": "model test button glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/providers.dart", r": AppIcons\.flask,"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt", r"AppIcons\.flask,"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ProvidersScreens.swift", r"AppIcon\(AppIcons\.flask, size: 16\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ProvidersScreens.kt", r"AppIcons\.flask,"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ProvidersScreens.swift", r"AppIcon\(AppIcons\.flask, size: 16\)"),
      }},
     # ---- config ----
     {"id": "config.drill.chevron", "slot": "chevron_right", "order": None, "why": "config drill-in trailing",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/config.dart", r"trailing: const Icon\(AppIcons\.chevron_right, size: 18\)"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt", r"Icon\(AppIcons\.chevron_right, contentDescription = null"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ConfigScreen.swift", r"AppIcon\(AppIcons\.chevron_right\)\.appFont\(\.meta\)"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt", r"Icon\(AppIcons\.chevron_right, contentDescription = null"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ConfigScreen.swift", r"AppIcon\(AppIcons\.chevron_right\)\.appFont\(\.meta\)"),
      }},
     {"id": "config.language.globe", "slot": "globe", "order": 1, "why": "UI-language row glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/config.dart", r"AppIcons\.globe, 'language'"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt", r"Tile\(AppIcons\.globe"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ConfigScreen.swift", r"rowContent\(AppIcons\.globe"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt", r"Tile\(AppIcons\.globe"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ConfigScreen.swift", r"rowContent\(AppIcons\.globe"),
      }},
     {"id": "config.agentLocale", "slot": "language", "order": 1, "why": "agent-language row glyph",
      "clients": {
          "flutter": ("agent-flutter/lib/screens/config.dart", r"AppIcons\.language,\s*'agentLocale'"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt", r"Tile\(AppIcons\.language"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ConfigScreen.swift", r"rowContent\(AppIcons\.language"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt", r"Tile\(AppIcons\.language"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ConfigScreen.swift", r"rowContent\(AppIcons\.language"),
      }},
     # ---- shell ----
     {"id": "shell.backends.server", "slot": "server", "order": 1, "why": "saved-backend row leading",
      "clients": {
          "flutter": ("agent-flutter/lib/main.dart", r"AppIcons\.server"),
-         "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/App.kt", r"AppIcons\.server"),
-         "swiftui": ("agent-swiftui-app/Sources/agent-app/AgentApp.swift", r"AppIcons\.server"),
+         "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/App.kt", r"AppIcons\.server"),
+         "swiftui": ("agent-swiftui/Sources/agent-app/AgentApp.swift", r"AppIcons\.server"),
      }},
 ]
 
@@ -499,17 +499,17 @@ TOOL_CARD_GLYPH: dict[str, tuple[str, str]] = {
     # client -> (file, exact fixed-glyph expression that must appear)
     "flutter": ("agent-flutter/lib/widgets/tool_icon.dart",
                 "Icon(AppIcons.tools, size: 14, color: colorsOf(context).primary)"),
-    "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
+    "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
                 "Icon(AppIcons.tools, contentDescription = null, tint = colors.primary"),
-    "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift",
+    "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift",
                 "AppIcon(AppIcons.tools, size: 14)"),
 }
 # The old per-family helpers; their return fails the check.
 TOOL_CARD_DEAD_HELPERS: dict[str, tuple[str, str]] = {
     "flutter": ("agent-flutter/lib/widgets/tool_icon.dart", ""),
-    "compose": ("agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
+    "compose": ("agent-compose/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
                 "fun toolGlyph("),
-    "swiftui": ("agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift",
+    "swiftui": ("agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift",
                 "func toolIconSlot("),
 }
 # The tool-result `data` key carrying produced-file refs; every client renders
@@ -518,8 +518,8 @@ TOOL_CARD_DEAD_HELPERS: dict[str, tuple[str, str]] = {
 TOOL_MEDIA_KEYS = ("files",)
 TOOL_MEDIA_FILES: dict[str, str] = {
     "flutter": "agent-flutter/lib/widgets/tool_part.dart",
-    "compose": "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
-    "swiftui": "agent-swiftui-app/Sources/agent-app/Screens/ChatScreen.swift",
+    "compose": "agent-compose/src/commonMain/kotlin/com/agent/app/ui/ToolCard.kt",
+    "swiftui": "agent-swiftui/Sources/agent-app/Screens/ChatScreen.swift",
 }
 
 
@@ -616,8 +616,8 @@ def generated_files(rows: dict[str, dict[str, str]]) -> dict[Path, list[str]]:
     Three generated files, one per client, all produced from ROWS so a slot can
     never drift between platforms:
       agent-flutter/lib/icons.dart                          AppIcons.<slot>
-      agent-compose-app/.../ui/IconSlots.kt                 AppIcons.<slot>
-      agent-swiftui-app/Sources/agent-app/Core/AppIcons.swift  AppIcons.<slot>
+      agent-compose/.../ui/IconSlots.kt                 AppIcons.<slot>
+      agent-swiftui/Sources/agent-app/Core/AppIcons.swift  AppIcons.<slot>
     """
     header = [
         "// GENERATED by tools/icons.py --emit — do not hand-edit.",
@@ -693,8 +693,8 @@ def generated_files(rows: dict[str, dict[str, str]]) -> dict[Path, list[str]]:
 
     return {
         ROOT / "agent-flutter/lib/icons.dart": fl,
-        ROOT / "agent-compose-app/src/commonMain/kotlin/com/agent/app/ui/IconSlots.kt": kt,
-        ROOT / "agent-swiftui-app/Sources/agent-app/Core/AppIcons.swift": sw,
+        ROOT / "agent-compose/src/commonMain/kotlin/com/agent/app/ui/IconSlots.kt": kt,
+        ROOT / "agent-swiftui/Sources/agent-app/Core/AppIcons.swift": sw,
     }
 
 
@@ -804,8 +804,8 @@ def check_no_unscanned_icons() -> int:
     scanned: set[str] = {rel for files in AREA_FILES.values()
                          for paths in files.values() for rel in paths}
     rc = 0
-    for client, root in (("flutter", "agent-flutter"), ("compose", "agent-compose-app"),
-                         ("swiftui", "agent-swiftui-app")):
+    for client, root in (("flutter", "agent-flutter"), ("compose", "agent-compose"),
+                         ("swiftui", "agent-swiftui")):
         for p in sorted((ROOT / root).rglob("*")):
             if not p.is_file() or p.suffix not in (".dart", ".kt", ".swift"):
                 continue
