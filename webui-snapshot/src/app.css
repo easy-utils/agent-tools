@@ -1,0 +1,260 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+
+/*
+ * Design tokens — a 1:1 port of flutter/lib/theme/app_theme.dart (AppColors
+ * dark/light + AppTypography scale). The dark set is the default, matching the
+ * Flutter app's dark-by-default start.
+ */
+
+/*
+ * Self-hosted fonts, byte-identical to the Flutter bundle (assets/fonts):
+ * the CJK UI face, the monospace face and the colour-emoji fallback. Local
+ * files only — no CDN / gstatic fetch, and the same glyph metrics as the
+ * other three clients.
+ *
+ * Both faces are STATIC 400/600 instances produced by tools/gen-fonts.py:
+ * the variable Noto Sans SC defaults to Thin(100) and the other engines
+ * select variable instances differently, so a 100..900 range would render
+ * lighter here than in Compose/SwiftUI.
+ */
+@font-face {
+  font-family: 'NotoSansSC';
+  src: url('/NotoSansSC-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NotoSansSC';
+  src: url('/NotoSansSC-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NotoSansMono';
+  src: url('/NotoSansMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NotoSansMono';
+  src: url('/NotoSansMono-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NotoColorEmoji';
+  src: url('/NotoColorEmoji.ttf') format('truetype');
+  font-display: swap;
+}
+/* LIGHT is the default (every client starts light): :root carries the light
+   values so the very first paint is light, and dark applies only when the user
+   explicitly selects it (data-theme="dark" on <html>). */
+:root,
+html[data-theme='light'] {
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --card: #fafafa;
+  --card-foreground: #1a1a1a;
+  --popover: #f5f5f5;
+  --popover-foreground: #1a1a1a;
+  --primary: #3b7dd8;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f1f1;
+  --secondary-foreground: #1a1a1a;
+  --muted: #f1f1f1;
+  --muted-foreground: #8a8a8a;
+  --accent: #d68c27;
+  --accent-foreground: #ffffff;
+  --destructive: #d1383d;
+  --destructive-foreground: #ffffff;
+  --border: #b8b8b8;
+  --input: #d4d4d4;
+  --ring: #3b7dd8;
+  --success: #3d9a57;
+  --warning: #d68c27;
+  color-scheme: light;
+}
+
+html[data-theme='dark'] {
+  --background: #0a0a0a;
+  --foreground: #eeeeee;
+  --card: #141414;
+  --card-foreground: #eeeeee;
+  --popover: #1e1e1e;
+  --popover-foreground: #eeeeee;
+  --primary: #fab283;
+  --primary-foreground: #000000;
+  --secondary: #181818;
+  --secondary-foreground: #eeeeee;
+  --muted: #181818;
+  --muted-foreground: #808080;
+  --accent: #9d7cd8;
+  --accent-foreground: #ffffff;
+  --destructive: #e06c75;
+  --destructive-foreground: #ffffff;
+  --border: #484848;
+  --input: #3c3c3c;
+  --ring: #fab283;
+  --success: #7fd88f;
+  --warning: #f5a742;
+  --radius: 0.5rem;
+  color-scheme: dark;
+}
+
+/* AppSpacing: xs 4, sm 8, md 12, lg 16, xl 24 — exposed as CSS vars so plain
+ * CSS can use the same rhythm as the Flutter layout. */
+:root {
+  --sp-xs: 4px;
+  --sp-sm: 8px;
+  --sp-md: 12px;
+  --sp-lg: 16px;
+  --sp-xl: 24px;
+  --bar-h: 48px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --font-sans: 'NotoSansSC', 'NotoColorEmoji', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'NotoSansMono', 'NotoSansSC', ui-monospace, monospace;
+}
+
+/* AppTypography scale as utilities (micro 10 / meta 12 / body 14 / mono 12). */
+@utility text-micro {
+  font-size: 10px;
+  line-height: 1.4;
+}
+@utility text-meta {
+  font-size: 12px;
+  line-height: 1.45;
+}
+@utility text-body {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+html {
+  height: 100%;
+  /* NOTE: no font-size here. Tailwind's type scale is rem-based, so setting a
+     root size (we used to force 14px) silently shrank text-sm to 12.25px and
+     text-xl to 17.5px — the whole UI read ~12% smaller than the Flutter and
+     Compose clients, which use absolute px/sp. Keep the browser default (1rem
+     = 16px) and size the body explicitly instead. */
+}
+body {
+  height: 100%;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  overscroll-behavior: none;
+}
+
+/* Dropdown menus (bits-ui) grow in, matching the Compose expand. */
+[data-slot='select-content'],
+[role='menu'] {
+  transform-origin: top;
+  animation: select-pop 160ms ease-out;
+}
+
+/* Markdown body inside message bubbles (prose base + token colors). */.md-body {
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.md-body p {
+  margin: 0 0 0.5em;
+}
+.md-body p:last-child {
+  margin-bottom: 0;
+}
+.md-body pre {
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 0.5em 0;
+}
+.md-body code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--popover);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.md-body pre code {
+  background: transparent;
+  padding: 0;
+}
+.md-body table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+}
+.md-body th,
+.md-body td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.md-body blockquote {
+  border-left: 3px solid var(--border);
+  margin: 0.5em 0;
+  padding-left: 10px;
+  color: var(--muted-foreground);
+}
+.md-body a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.md-body ul,
+.md-body ol {
+  margin: 0.25em 0;
+  padding-left: 1.4em;
+}
+/* highlight.js token colors tuned for both themes */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal {
+  color: var(--accent);
+}
+.hljs-string,
+.hljs-attr {
+  color: var(--success);
+}
+.hljs-number {
+  color: var(--warning);
+}
+.hljs-comment {
+  color: var(--muted-foreground);
+}
+.hljs-title,
+.hljs-name {
+  color: var(--primary);
+}

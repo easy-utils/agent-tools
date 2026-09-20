@@ -21,8 +21,12 @@ run() {
 }
 
 # ---- cross-client source guards (fast) ----
-# Identity + default-gateway + tagged-deps guard across ALL 8 client repos.
+# Identity + default-gateway + tagged-deps guard across ALL 9 client repos.
 run python3 clients.py
+# Page / navigation contract: tabs, page keys, dispatch, config sub-ids,
+# overlays — identical on every full client; skeletons checked against the same
+# contract; the upstream webui is WARN-only.
+run python3 pages.py
 run python3 icons.py --check
 run python3 icons.py --positions
 run python3 parity.py

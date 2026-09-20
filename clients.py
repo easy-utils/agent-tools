@@ -37,9 +37,12 @@ STALE_HOSTES = (
 
 APP_NAME = "Easy Agent"
 
-# client -> dict(repo, title=[(rel, regex)], base=[rel], deps=[rel])
+# client -> dict(repo, title=[(rel, regex)], base=[rel], deps=[rel], soft?)
 # `base` files must carry DEFAULT_HOST; a client with no default (Flutter, which
 # starts from an empty backend list / AGENT_BASE_URL) lists none.
+# `soft` clients are upstream (webui): findings are WARN-only.
+# `repo` may be absolute (the read-only webui snapshot).
+WEBUI_SNAPSHOT = Path(__file__).resolve().parent / "webui-snapshot"
 CLIENTS: dict[str, dict] = {
     "flutter": {
         "repo": "agent-flutter",
@@ -93,6 +96,16 @@ CLIENTS: dict[str, dict] = {
         "base": ["Views/ConnectPage.cs"],
         "deps": ["Easy.Agent.csproj"],
     },
+    # Upstream (read-only snapshot): soft. The webui is served same-origin so it
+    # has no gateway default, and its own title is "ABCP Agent" (not ours to
+    # change); we only pin the dependency rule + that it is present.
+    "webui": {
+        "repo": str(WEBUI_SNAPSHOT),
+        "soft": True,
+        "title": [],
+        "base": [],
+        "deps": ["package.json"],
+    },
 }
 
 # Local-path dependency smells: a cross-repo reference that escapes THIS repo,
@@ -112,43 +125,47 @@ LOCAL_DEP = re.compile(
 def check() -> int:
     rc = 0
     for client, spec in CLIENTS.items():
-        repo = ROOT / spec["repo"]
+        soft = spec.get("soft", False)
+        tag = "WARN" if soft else "FAIL"
+        rp = Path(spec["repo"])
+        repo = rp if rp.is_absolute() else ROOT / rp
         if not repo.is_dir():
-            print(f"FAIL {client:<12}missing repo {spec['repo']}")
-            rc = 1
+            print(f"{tag} {client:<12}missing repo {spec['repo']}")
+            if not soft:
+                rc = 1
             continue
+
+        def bad(msg: str):
+            nonlocal rc
+            print(f"{tag} {client:<12}{msg}")
+            if not soft:
+                rc = 1
 
         for rel, pat in spec["title"]:
             p = repo / rel
             if not p.exists() or not re.search(pat, p.read_text(errors="ignore")):
-                print(f"FAIL {client:<12}title missing in {rel}")
-                rc = 1
+                bad(f"title missing in {rel}")
 
         for rel in spec["base"]:
             p = repo / rel
             if not p.exists():
-                print(f"FAIL {client:<12}missing {rel}")
-                rc = 1
+                bad(f"missing {rel}")
                 continue
             text = p.read_text(errors="ignore")
             for stale in STALE_HOSTES:
                 if stale in text:
-                    print(f"FAIL {client:<12}stale host {stale} in {rel}")
-                    rc = 1
+                    bad(f"stale host {stale} in {rel}")
             if DEFAULT_HOST not in text:
-                print(f"FAIL {client:<12}canonical host absent from {rel}")
-                rc = 1
+                bad(f"canonical host absent from {rel}")
 
         for rel in spec["deps"]:
             p = repo / rel
             if not p.exists():
-                print(f"FAIL {client:<12}missing {rel}")
-                rc = 1
+                bad(f"missing {rel}")
                 continue
             for i, line in enumerate(p.read_text(errors="ignore").splitlines(), 1):
                 if LOCAL_DEP.search(line):
-                    print(f"FAIL {client:<12}local-path dep in {rel}:{i}: {line.strip()}")
-                    rc = 1
+                    bad(f"local-path dep in {rel}:{i}: {line.strip()}")
 
     return rc
 

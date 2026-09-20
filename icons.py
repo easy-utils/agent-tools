@@ -904,6 +904,33 @@ def check_positions() -> int:
     return rc
 
 
+# The read-only upstream webui snapshot. It is not under our control, so its
+# findings are WARN-only — but we still assert the canonical slot set is a
+# SUBSET of what it defines (a missing canonical slot means the clients would
+# render a different glyph there).
+WEBUI = Path(__file__).resolve().parent / "webui-snapshot"
+
+
+def check_webui_icons() -> int:
+    """WARN-only: the canonical slots must all exist in the webui's table."""
+    p = WEBUI / "src/lib/icons.ts"
+    if not p.exists():
+        print("WARN icons    webui snapshot missing src/lib/icons.ts")
+        return 0
+    body = p.read_text().split("export const AppIcons = {", 1)
+    if len(body) < 2:
+        print("WARN icons    webui AppIcons table not found")
+        return 0
+    webui = set(re.findall(r"^\s*([a-z_]+):", body[1].split("}", 1)[0], re.M))
+    missing = sorted(set(SLOTS) - webui)
+    if missing:
+        print(f"WARN icons    webui missing {len(missing)} canonical slots: {' '.join(missing)}")
+    else:
+        print(f"WARN icons    webui covers all {len(SLOTS)} canonical slots "
+              f"(+{len(webui - set(SLOTS))} extra)")
+    return 0
+
+
 def main() -> int:
     if "--refresh" in sys.argv:
         return refresh()
@@ -911,6 +938,7 @@ def main() -> int:
         return emit()
     if "--positions" in sys.argv:
         rc = check_positions() | check_position_table() | check_no_unscanned_icons()
+        check_webui_icons()
         print(f"icons: positions {'OK' if rc == 0 else 'FAILED'} "
               f"({len(POSITIONS)} pinned positions)")
         return rc
@@ -954,6 +982,7 @@ def main() -> int:
     # 4) the position registry — no single-client glyph may exist (this is what
     #    actually keeps the ports showing the SAME icon at the SAME spot).
     rc_pos = check_positions() | check_position_table() | check_no_unscanned_icons()
+    check_webui_icons()
 
     print(f"icons: {'OK' if rc == 0 and rc_pos == 0 and rc_tool == 0 else 'FAILED'} "
           f"({len(rows)} slots, {len(POSITIONS)} pinned positions)")

@@ -20,10 +20,15 @@ from pathlib import Path
 # $AGENT_APPS_ROOT when the apps live elsewhere.
 import os as _os
 ROOT = Path(_os.environ.get('AGENT_APPS_ROOT') or Path(__file__).resolve().parent.parent)
+# The read-only upstream webui snapshot (we do not control abcp-sdk/webui, so its
+# findings are WARN-only).
+WEBUI = Path(__file__).resolve().parent / "webui-snapshot"
 FLUTTER = ROOT / "agent-flutter" / "l10n"
+# name -> (path, soft). A soft port reports drift but never fails the run.
 PORTS = {
-    "compose": ROOT / "agent-compose/src/commonMain/kotlin/com/agent/app/i18n/I18n.kt",
-    "swiftui": ROOT / "agent-swiftui/Sources/agent-app/Core/I18n.swift",
+    "compose": (ROOT / "agent-compose/src/commonMain/kotlin/com/agent/app/i18n/I18n.kt", False),
+    "swiftui": (ROOT / "agent-swiftui/Sources/agent-app/Core/I18n.swift", False),
+    "webui": (WEBUI / "src/lib/i18n.svelte.ts", True),
 }
 PLACEHOLDER = re.compile(r"\{([a-zA-Z0-9_]+)\}")
 
@@ -38,6 +43,11 @@ def port_keys(name: str, text: str) -> set[str]:
         return set(re.findall(r'"([a-zA-Z0-9_]+)" to "', text))
     if name == "swiftui":
         return set(re.findall(r'^  "([a-zA-Z0-9_]+)":', text, re.M))
+    if name == "webui":
+        # The webui holds both the en and zh maps in one file; take the first
+        # (en) map only, up to the zh map's declaration.
+        en_map = text.split("const zh = {", 1)[0]
+        return set(re.findall(r"^  '([a-zA-Z0-9_]+)':", en_map, re.M))
     return set(re.findall(r"^  '([a-zA-Z0-9_]+)':", text, re.M))
 
 
@@ -46,17 +56,24 @@ def main() -> int:
     zh = flutter_keys("zh")
     rc = 0
     print(f"agent-flutter/en: {len(en)} keys  agent-flutter/zh: {len(zh)} keys\n")
-    for name, path in PORTS.items():
+    for name, (path, soft) in PORTS.items():
+        if not path.exists():
+            print(f"== {name} ==\n  {'WARN' if soft else 'FAIL'} missing {path}")
+            if not soft:
+                rc = 1
+            continue
         text = path.read_text()
         keys = port_keys(name, text)
         missing = sorted(k for k in en if k not in keys)
         extra = sorted(k for k in keys if k not in en)
+        tag = "WARN" if soft else "FAIL"
         print(f"== {name} ({len(keys)} keys) ==")
         if missing:
-            rc = 1
-            print(f"  MISSING ({len(missing)}): {' '.join(missing)}")
+            if not soft:
+                rc = 1
+            print(f"  {tag} MISSING ({len(missing)}): {' '.join(missing)}")
         if extra:
-            print(f"  extra  ({len(extra)}): {' '.join(extra)}")
+            print(f"  {tag} extra  ({len(extra)}): {' '.join(extra)}")
         if not missing and not extra:
             print("  keys: OK")
     rc |= check_default_locale()
