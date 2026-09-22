@@ -1,9 +1,14 @@
 // Transport + typed client factory over the latest @abcp/agent-sdk
 // (agent.v1.AgentService, Connect protocol). The caller owns baseUrl + token;
 // the client is rebuilt on backend switch.
-import { createClient, type Client, type Interceptor } from '@connectrpc/connect'
-import { createConnectTransport } from '@connectrpc/connect-web'
+
 import { AgentService } from '@abcp/agent-sdk'
+import {
+  type Client,
+  createClient,
+  type Interceptor,
+} from '@connectrpc/connect'
+import { createConnectTransport } from '@connectrpc/connect-web'
 
 export type AgentClient = Client<typeof AgentService>
 

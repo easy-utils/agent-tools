@@ -1,7 +1,8 @@
 // Shared page prop bag handed to every routed page by the Shell.
-import type { AppStore } from './store.svelte'
+
 import type { BackendCfg } from './models'
 import type { ThemeMode } from './prefs'
+import type { AppStore } from './store.svelte'
 
 export interface PageProps {
   store: AppStore

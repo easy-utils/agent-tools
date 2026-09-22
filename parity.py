@@ -45,9 +45,10 @@ def port_keys(name: str, text: str) -> set[str]:
         return set(re.findall(r'^  "([a-zA-Z0-9_]+)":', text, re.M))
     if name == "webui":
         # The webui holds both the en and zh maps in one file; take the first
-        # (en) map only, up to the zh map's declaration.
+        # (en) map only, up to the zh map's declaration. Keys are UNQUOTED
+        # (``key: `value` ``), not `'key':`.
         en_map = text.split("const zh = {", 1)[0]
-        return set(re.findall(r"^  '([a-zA-Z0-9_]+)':", en_map, re.M))
+        return set(re.findall(r"^\s*([a-zA-Z0-9_]+):\s*`", en_map, re.M))
     return set(re.findall(r"^  '([a-zA-Z0-9_]+)':", text, re.M))
 
 

@@ -8,7 +8,7 @@
   import type { AgentApi } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
   import {
-    downloadFile,
+    downloadWithFeedback,
     formatBytes,
     formatDuration,
     mediaStreamUrl,
@@ -141,7 +141,7 @@
       {#if current.durationMs}
         <span class="hidden text-micro opacity-60 sm:inline">{formatDuration(current.durationMs)}</span>
       {/if}
-      <button type="button" class="rounded p-1.5 hover:bg-white/10" title={t('download')} aria-label={t('download')} onclick={() => void downloadFile(api, current.code, current.name ?? current.code)}>
+      <button type="button" class="rounded p-1.5 hover:bg-white/10" title={t('download')} aria-label={t('download')} onclick={() => void downloadWithFeedback(api, current.code, current.name ?? current.code, { mime: current.mime })}>
         <AppIcons.download class="size-4" />
       </button>
       <button type="button" class="rounded p-1.5 hover:bg-white/10" title={t('close')} aria-label={t('close')} onclick={closeViewer}>

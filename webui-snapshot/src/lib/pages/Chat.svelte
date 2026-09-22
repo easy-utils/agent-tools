@@ -11,17 +11,20 @@
   import { confirmDialog, promptDialog } from '$lib/dialogs'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { guessMime, mimeToKind } from '$lib/media'
-  import type { ModelInfo, ModelVariantInfo, Preset, ProviderInfo, Session, UploadedFile } from '$lib/models'
+  import type { ModelInfo, Preset, ProviderInfo, Session, UploadedFile } from '$lib/models'
   import { modelRefOf, sessionName } from '$lib/models'
+  import { buildModelOptions, fmtContext, fmtElapsed, variantsFor } from '$lib/chat-helpers'
+  import { composerAction } from '$lib/composer-action'
   import { VoiceRecorder } from '$lib/voice'
   import { cn } from '$lib/utils'
+  import IconButton from '$lib/components/layout/IconButton.svelte'
   import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '$lib/components/ui/dropdown-menu'
-  import { Popover } from '$lib/components/ui/popover'
-  import { Select } from '$lib/components/ui/select'
-  import { Dialog } from '$lib/components/ui/dialog'
   import { AppIcons } from '$lib/icons'
   import MessageBubble from '$lib/components/MessageBubble.svelte'
   import MediaAttachment from '$lib/components/MediaAttachment.svelte'
+  import ChatInfoDialog from './ChatInfoDialog.svelte'
+  import ChatSettingsDialog from './ChatSettingsDialog.svelte'
+  import ReconnectBanner from '$lib/components/ReconnectBanner.svelte'
 
   let { store }: PageProps = $props()
 
@@ -103,19 +106,29 @@
     const id = sid
     const d = untrack(() => store.chatDrafts[id])
     text = d?.text ?? ''
-    attachments = d?.attachments ?? []
+    // RESTORE DEFENSIVELY: a draft persisted before dedupe-by-code existed can
+    // list the same file twice. Two entries sharing a code collide on the
+    // composer's {#each} key and Svelte throws each_key_duplicate, which kills
+    // the whole pane render. Also drop dead blob: URLs (from a previous load)
+    // so the tile falls back to the server thumbnail.
+    const seen = new Set<string>()
+    attachments = (d?.attachments ?? [])
+      .filter(a => (seen.has(a.code) ? false : (seen.add(a.code), true)))
+      .map(a =>
+        a.localPath?.startsWith('blob:') ? { ...a, localPath: '' } : a,
+      )
   })
 
   async function loadMeta() {
     try {
       providers = await store.api.providers()
-    } catch {
-      /* providers optional for chat */
+    } catch (e) {
+      showErrorToast(t('loadError', { e: String(e) }))
     }
     try {
       presets = await store.api.presets()
-    } catch {
-      /* presets optional */
+    } catch (e) {
+      showErrorToast(t('loadError', { e: String(e) }))
     }
   }
 
@@ -149,51 +162,160 @@
     store.saveDraftAttachments(sid, attachments)
   }
 
+  /** SAME metric classes for the textarea and the hold-to-talk button: one
+   *  source of truth for font-size / line-height / padding / block layout, so
+   *  the text origin is identical in both modes (see the composer markup).
+   *  Text is TOP-anchored via padding; do NOT centre it with flex, which
+   *  rounds (contentH - lineH) / 2 and shifts the label by half a pixel. */
+  const INNER_FIELD =
+    'block w-full min-h-[42px] border-0 bg-transparent px-3 py-[10px] text-sm leading-[21px]'
+
+  /** Auto-grow the composer textarea to its content (capped at 160px). */
+  function autoGrow(el: HTMLTextAreaElement) {
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+  }
+
   function schedulePersist() {
     draftTimer && clearTimeout(draftTimer)
     draftTimer = setTimeout(persistDraft, 300)
   }
 
+  // Restore the composer height when leaving voice mode. The textarea stays
+  // MOUNTED while hidden, so its value + inline height survive; re-applying
+  // the auto-grow keeps the box correct even if the width changed while it
+  // was invisible (a wrong height there is what used to collapse a
+  // multi-line draft back to one line).
+  $effect(() => {
+    if (voiceMode) return
+    const el = taEl
+    if (!el) return
+    // Track the value so the height is recomputed whenever the draft changes.
+    void text
+    autoGrow(el)
+  })
+
   // ---- sending ----
+  // ONE path for both idle and busy sessions: every prompt goes to the mailbox,
+  // and the user bubble is rendered ONLY when the server's message-added event
+  // arrives. The composer is locked (spinner) until then — `ctrl.awaitingSend`.
+  // While a turn is RUNNING the action circle shows an envelope; sending it
+  // plays a fly-to-mailbox animation.
 
-  // Uploads currently in flight (so send can await them all first).
+  // Uploads currently in flight (so submit can await them all first).
   const inflightUploads = new Set<Promise<void>>()
-  let sending = $state(false)
+  /** True while a submit is in progress (uploads awaited, RPC in flight). */
+  let submitting = $state(false)
 
-  function canSend(): boolean {
-    return (!!text.trim() || attachments.some(a => a.code)) && !!(ctrl && !ctrl.sending)
+  // The composer is locked ONLY by OUR OWN in-flight send — never by a turn
+  // running on the server. A running turn is exactly when the envelope
+  // (deliver-to-mailbox) is shown and expected to WORK; gating on
+  // `ctrl.sending` made the mailbox button a no-op while a turn ran.
+  const hasContent = $derived(!!text.trim() || attachments.some(a => a.code))
+
+  // The one action circle's state, resolved from the flags (composer-action.ts
+  // owns the precedence). `deliver` outranks `stop` while a turn runs.
+  const action = $derived(
+    composerAction({
+      awaitingSend: ctrl?.awaitingSend ?? false,
+      sending: ctrl?.sending ?? false,
+      canDeliver: !!(
+        ctrl?.sending &&
+        (text.trim() || attachments.length)
+      ),
+      submitting,
+      canSend: hasContent && !!ctrl && !ctrl.sending && !ctrl.awaitingSend,
+    }),
+  )
+
+  // ---- deliver-to-mailbox animation ----
+  let envelopeBtnEl: HTMLElement | null = $state(null)
+  let mailboxBtnEl: HTMLElement | null = $state(null)
+  let flyFrom = $state<{ x: number; y: number } | null>(null)
+  let flyTo = $state<{ x: number; y: number } | null>(null)
+  let flyEl: HTMLElement | null = $state(null)
+
+  /** True when the action should read as "deliver to mailbox" (busy session
+   *  with content to send). */
+  function canDeliver(): boolean {
+    return !!(ctrl?.sending && (text.trim() || attachments.length))
   }
 
-  async function send() {
-    if (!canSend() || !ctrl || sending) return
-    sending = true
-    // If any attachment is still uploading, wait for every in-flight upload to
-    // finish before sending (flutter _send).
-    if (inflightUploads.size) {
-      await Promise.allSettled([...inflightUploads])
-      if (ctrl.sending) { sending = false; return }
+  /** FLIP the envelope glyph from the composer button to the mailbox button. */
+  function startFly() {
+    const f = envelopeBtnEl
+    const t = mailboxBtnEl
+    if (!f || !t) return
+    const a = f.getBoundingClientRect()
+    const b = t.getBoundingClientRect()
+    flyFrom = { x: a.left + a.width / 2, y: a.top + a.height / 2 }
+    flyTo = { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+  }
+
+  // Run the fly animation once the ghost is mounted, then clear it.
+  $effect(() => {
+    const el = flyEl
+    const from = flyFrom
+    const to = flyTo
+    if (!el || !from || !to) return
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const anim = el.animate(
+      [
+        { transform: 'translate(-50%,-50%) scale(1) rotate(0deg)', opacity: 1 },
+        {
+          transform: `translate(calc(-50% + ${dx * 0.5}px), calc(-50% + ${dy * 0.5 - 40}px)) scale(0.85) rotate(-16deg)`,
+          opacity: 1,
+          offset: 0.55,
+        },
+        {
+          transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.35) rotate(-32deg)`,
+          opacity: 0,
+        },
+      ],
+      { duration: 650, easing: 'cubic-bezier(.4,0,.2,1)' },
+    )
+    anim.onfinish = () => {
+      flyFrom = null
+      flyTo = null
     }
-    // ALL-or-NOTHING: refuse the send while any attachment lacks a server code
-    // (still uploading or failed) — never send a partial batch.
-    const failed = attachments.filter(a => a.uploadState === 'error' || !a.code || a.code.startsWith('tmp-'))
-    if (failed.length) {
-      sending = false
-      showErrorToast(t('uploadFailedRetry', { arg1: failed.length }))
-      return
+  })
+
+  async function submit() {
+    // Block only our OWN pending send, not a server-side turn: delivering to
+    // the mailbox while a turn runs is the whole point of the envelope.
+    if (!ctrl || submitting || ctrl.awaitingSend) return
+    submitting = true
+    try {
+      // Wait for every in-flight upload before sending (never a partial batch).
+      if (inflightUploads.size) await Promise.allSettled([...inflightUploads])
+      const failed = attachments.filter(a => a.uploadState === 'error' || !a.code || a.code.startsWith('tmp-'))
+      if (failed.length) {
+        showErrorToast(t('uploadFailedRetry', { arg1: failed.length }))
+        return
+      }
+      const body = text
+      const files = attachments.filter(a => a.code)
+      // Capture the source rect BEFORE clearing the draft: clearing morphs the
+      // envelope button back to STOP and unmounts it.
+      if (canDeliver()) startFly()
+      text = ''
+      attachments = []
+      persistDraft()
+      // Mailbox-only: the composer stays busy until message-added confirms the
+      // write; the bubble is rendered by the server event, not optimistically.
+      await ctrl.deliver(body, files)
+    } catch {
+      /* error bubble already added by the controller */
+    } finally {
+      submitting = false
     }
-    const body = text
-    const files = attachments.filter(a => a.code)
-    text = ''
-    attachments = []
-    persistDraft()
-    sending = false
-    await ctrl.send(body, files)
   }
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault()
-      void send()
+      void submit()
     }
   }
 
@@ -220,8 +342,32 @@
     // pending` check would never fire — the tile stayed "uploading" forever.
     const job = (async () => {
       try {
-        const done = await store.api.uploadFile({ path: '', name: src.name, mimeType: src.mimeType, bytes: src.bytes })
-        attachments = attachments.map(a => (a.code === localKey ? done : a))
+        // Real byte-level progress (XHR upload), so the tile can show a true
+        // percentage instead of a spinner for large uploads.
+        const done = await store.api.uploadFile(
+          { path: '', name: src.name, mimeType: src.mimeType, bytes: src.bytes },
+          (d, total) => {
+            const pct = total > 0 ? Math.round((d / total) * 100) : -1
+            attachments = attachments.map(a =>
+              a.code === localKey && a.uploadState === 'uploading'
+                ? { ...a, uploadPct: pct }
+                : a,
+            )
+          },
+        )
+        const finished = { ...done, localPath: localUrls[localKey] ?? '' }
+        if (localUrls[localKey] !== undefined) {
+          // Re-key the object URL onto the server code so it is revocable and
+          // the persisted draft references a stable key.
+          localUrls[finished.code] = localUrls[localKey]!
+          delete localUrls[localKey]
+        }
+        // DEDUPE BY CODE: the agent returns the SAME code for identical bytes,
+        // so re-picking a file already in the list must not create a second
+        // entry — two entries sharing a code also break the keyed {#each}.
+        attachments = attachments.some(a => a.code === finished.code)
+          ? attachments.filter(a => a.code !== localKey)
+          : attachments.map(a => (a.code === localKey ? finished : a))
       } catch (e) {
         attachments = attachments.map(a =>
           a.code === localKey ? { ...a, uploadState: 'error', error: String(e) } : a,
@@ -333,11 +479,6 @@
     else showToast(t('voiceTooShort'))
   }
 
-  function fmtDuration(ms: number): string {
-    const total = Math.floor(ms / 1000)
-    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
-  }
-
   /** AppIcons.camera capture (flutter `_pickImage(ImageSource.camera)`). */
   function takePhoto() {
     const input = document.createElement('input')
@@ -382,18 +523,9 @@
     }
   }
 
-  const modelOptions = $derived.by(() => {
-    const opts = allModels.map(m => ({ value: modelRefOf(m), label: modelRefOf(m) }))
-    if (selectedRef && !allModels.some(m => modelRefOf(m) === selectedRef)) {
-      opts.unshift({ value: selectedRef, label: selectedRef })
-    }
-    return opts
-  })
+  const modelOptions = $derived(buildModelOptions(allModels, selectedRef))
 
-  const variantsForModel = $derived.by(() => {
-    const sel = allModels.filter(m => modelRefOf(m) === selectedRef)
-    return sel.length ? sel[0]!.variants : ([] as ModelVariantInfo[])
-  })
+  const variantsForModel = $derived(variantsFor(allModels, selectedRef))
 
   $effect(() => {
     if (variantsForModel.length && !variantsForModel.some(v => v.id === variant)) variant = ''
@@ -457,13 +589,6 @@
     }
   }
 
-  function fmtContext(tokens: number): string {
-    if (tokens <= 0) return ''
-    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`
-    if (tokens >= 10_000) return `${Math.round(tokens / 1000)}k`
-    return `${(tokens / 1000).toFixed(1)}k`
-  }
-
   const ctxLabel = $derived(fmtContext((session?.lastInputTokens ?? 0) + (session?.lastOutputTokens ?? 0)))
   const presetOptions = $derived([
     ...presets.map(p => p.id),
@@ -494,9 +619,9 @@
     ondrop={e => void onDrop(e)}
   >
     <!-- top bar -->
-    <header class="relative flex h-12 shrink-0 items-center border-b border-border/50 px-1">
+    <header class="relative flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
       <div class="flex min-w-0 items-center gap-2">
-        <button type="button" class="rounded p-1.5 hover:bg-muted" aria-label="back" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
+        <IconButton icon={AppIcons.back} label={t('back')} onclick={() => store.popPage()} />
         <span class={cn('size-2 rounded-full', ctrl.sending ? 'bg-warning' : 'bg-success')}></span>
         {#if ctxLabel}
           <span class="text-micro text-muted-foreground tabular-nums">{ctxLabel}</span>
@@ -512,16 +637,28 @@
           {session?.id}
         </button>
       </div>
-      <div class="ml-auto">
+      <div class="ml-auto flex items-center gap-0.5">
+        <!-- Mailbox, extracted from the ⋯ menu into its own button. The red
+             dot (top-right) counts PENDING (unconsumed) mailbox entries. -->
+        <div bind:this={mailboxBtnEl} class="relative">
+          <IconButton icon={AppIcons.inbox} label={t('mailbox')} onclick={() => void menuAction('mailbox')} />
+          {#if (ctrl?.pendingMailbox ?? 0) > 0}
+            <span class="pointer-events-none absolute top-0.5 right-0.5 flex min-w-[14px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] leading-[14px] font-bold text-destructive-foreground">
+              {ctrl?.pendingMailbox}
+            </span>
+          {/if}
+        </div>
         <DropdownMenu label={t('settingsTitle')}>
           <DropdownMenuItem onSelect={() => void menuAction('compact')}>{t('compactHistory')}</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void menuAction('mailbox')}>{t('mailbox')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void menuAction('fork')}>{t('fork')}</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem class="text-destructive" onSelect={() => void menuAction('delete')}>{t('deleteSession')}</DropdownMenuItem>
         </DropdownMenu>
       </div>
     </header>
+
+    <!-- reconnecting strip (below the header, in-page, not app-wide) -->
+    <ReconnectBanner />
 
     <!-- messages -->
     <div bind:this={listEl} class="min-h-0 flex-1 overflow-y-auto px-3 py-3" onscroll={onScroll}>
@@ -543,20 +680,23 @@
         {#each ctrl.sorted as msg (msg.id)}
           <MessageBubble
             {msg}
+            sessionId={sid}
             api={store.api}
             onUndo={id => void ctrl!.revert(id)}
             onResend={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
             onEdit={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
+            onOpenSession={name => store.pickSession(name)}
+            sessionExists={name => store.sessionById(name) !== null}
           />
         {/each}
       {/if}
     </div>
 
     <!-- composer -->
-    <div class="shrink-0 border-t border-border/50 bg-card px-3 pt-1 pb-1">
+    <div class="shrink-0 border-t border-border bg-card px-3 pt-1 pb-1">
       {#if attachments.length}
         <div class="mb-2 flex flex-wrap gap-1 pt-1">
-          {#each attachments as a (a.code + a.name)}
+          {#each attachments as a (a.code)}
             <div class="relative">
               <MediaAttachment
                 api={store.api}
@@ -565,7 +705,7 @@
                 mime={a.mime}
                 size={a.size ?? null}
                 dimension={tileDim}
-                localUrl={a.uploadState !== 'done' ? isLocalPreview(a) : ''}
+                localUrl={isLocalPreview(a)}
               />
               <button
                 type="button"
@@ -578,7 +718,10 @@
                 onclick={() => (a.uploadState === 'error' ? void retryUpload(a) : removeAttachment(a))}
                 title={a.uploadState === 'error' ? t('retry') : t('delete')}
               >
-                {#if a.uploadState === 'uploading'}<span class="block size-2.5 animate-spin rounded-full border border-white/40 border-t-white"></span>{:else if a.uploadState === 'error'}<AppIcons.refresh class="size-2.5" />{:else}<AppIcons.close class="size-2.5" />{/if}
+                {#if a.uploadState === 'uploading' && a.uploadPct != null && a.uploadPct >= 0}
+                  <!-- True byte progress beats an indeterminate spinner. -->
+                  <span class="text-[9px] font-semibold tabular-nums">{a.uploadPct}%</span>
+                {:else if a.uploadState === 'uploading'}<span class="block size-2.5 animate-spin rounded-full border border-white/40 border-t-white"></span>{:else if a.uploadState === 'error'}<AppIcons.refresh class="size-2.5" />{:else}<AppIcons.close class="size-2.5" />{/if}
               </button>
             </div>
           {/each}
@@ -593,72 +736,119 @@
           class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted disabled:opacity-40"
           title={voiceMode ? t('keyboardMode') : t('voiceMode')}
           aria-label={voiceMode ? t('keyboardMode') : t('voiceMode')}
-          disabled={ctrl.sending}
           onclick={() => (voiceMode = !voiceMode)}
         >
           {#if voiceMode}<AppIcons.keyboard class="size-[22px]" />{:else}<AppIcons.mic class="size-[22px]" />{/if}
         </button>
 
-        {#if voiceMode}
-          <!-- Hold to talk: press-and-hold records, release sends (flutter
-               `_holdToTalkButton`, same 42px shell as the field). -->
-          <button
-            type="button"
+        <!-- Field shell: SHARED by both modes and never replaced, so the
+             geometry cannot drift between keyboard and voice. Border, radius,
+             background and the minimum height live HERE (one place), and the
+             recording tint is applied to this same box.
+
+             The inner control (textarea or hold-to-talk button) uses the SAME
+             metric class string (INNER_FIELD) in both branches: identical
+             font-size/line-height/padding, block layout, top-anchored text.
+             That is what makes the text origin sub-pixel identical — an
+             earlier version centred the voice label with flex
+             (`(42-21)/2 = 10.5px`) while the textarea anchored it with
+             `padding-top:10px`, so the label sat 0.5px lower and the composer
+             visibly twitched on every mic/keyboard switch.
+
+             The textarea stays MOUNTED in voice mode (only hidden): unmounting
+             it discarded the inline height the auto-grow handler had set, so
+             returning from voice collapsed a multi-line draft back to one
+             line. -->
+        <div
+          class={cn(
+            'relative min-h-[44px] flex-1 rounded-md border',
+            recording
+              ? 'border-destructive bg-destructive/12'
+              : 'border-border/60 bg-muted',
+          )}
+        >
+          <textarea
+            bind:this={taEl}
+            bind:value={text}
+            rows="1"
             class={cn(
-              // `touch-none` + no text selection + no iOS long-press callout:
-              // a press-and-hold must NOT open the browser's native context /
-              // copy-paste panel, which would cancel the recording.
-              'flex min-h-[42px] flex-1 touch-none items-center justify-center rounded-md border px-3 text-body select-none [-webkit-touch-callout:none]',
-              recording
-                ? 'border-destructive bg-destructive/12 font-semibold text-destructive'
-                : 'border-border/60 bg-muted text-muted-foreground',
+              INNER_FIELD,
+              'max-h-40 resize-none outline-none placeholder:text-muted-foreground',
+              voiceMode && 'invisible',
             )}
-            oncontextmenu={e => e.preventDefault()}
-            onpointerdown={e => {
-              // Capture the pointer so pointerup fires even if the finger
-              // drifts off the button; suppress the native long-press menu.
-              e.preventDefault()
-              try {
-                e.currentTarget.setPointerCapture(e.pointerId)
-              } catch {
-                /* unsupported */
-              }
-              void startRecording()
+            placeholder={attachments.length ? '' : t('typeMessage')}
+            onkeydown={onKeydown}
+            onpaste={onPaste}
+            oninput={e => {
+              schedulePersist()
+              autoGrow(e.currentTarget)
             }}
-            onpointerup={() => void stopRecording()}
-            onpointercancel={() => void stopRecording()}
-          >
-            {recording ? `${t('releaseToSend')} · ${fmtDuration(voiceElapsed)}` : t('holdToTalk')}
-          </button>
-        {:else}
-          <div class="flex min-h-[42px] flex-1 items-center rounded-md border border-border/60 bg-muted">
-            <textarea
-              bind:this={taEl}
-              bind:value={text}
-              rows="1"
-              class="max-h-40 min-h-[42px] flex-1 resize-none border-0 bg-transparent px-3 py-[10px] text-sm leading-[21px] outline-none placeholder:text-muted-foreground"
-              placeholder={attachments.length ? '' : t('typeMessage')}
-              onkeydown={onKeydown}
-              onpaste={onPaste}
-              oninput={e => {
-                schedulePersist()
-                const el = e.currentTarget
-                el.style.height = 'auto'
-                el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+          ></textarea>
+
+          {#if voiceMode}
+            <button
+              type="button"
+              class={cn(
+                INNER_FIELD,
+                // `touch-none` + no text selection + no iOS long-press callout:
+                // a press-and-hold must NOT open the browser's native context /
+                // copy-paste panel, which would cancel the recording.
+                // `items-start` is load-bearing: a <button>'s UA style
+                // vertically CENTRES its content box, so the label landed at
+                // (42-21)/2 = 10.5px while the textarea anchored it at
+                // padding-top: 10px. Top-aligning makes both text origins
+                // compute from the same padding (sub-pixel identical) instead
+                // of relying on two coincidentally-close numbers.
+                'absolute inset-0 flex items-start justify-center touch-none select-none [-webkit-touch-callout:none]',
+                recording
+                  ? 'font-semibold text-destructive'
+                  : 'text-muted-foreground',
+              )}
+              oncontextmenu={e => e.preventDefault()}
+              onpointerdown={e => {
+                // Capture the pointer so pointerup fires even if the finger
+                // drifts off the button; suppress the native long-press menu.
+                e.preventDefault()
+                try {
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                } catch {
+                  /* unsupported */
+                }
+                void startRecording()
               }}
-            ></textarea>
-          </div>
-        {/if}
+              onpointerup={() => void stopRecording()}
+              onpointercancel={() => void stopRecording()}
+            >
+              {recording ? `${t('releaseToSend')} · ${fmtElapsed(voiceElapsed)}` : t('holdToTalk')}
+            </button>
+          {/if}
+        </div>
 
         <!-- Right: one morphing action circle — WHITE fill with a colored
-             outline + colored glyph (blue send / red stop / muted attach),
-             never a solid colored fill. -->
-        {#if ctrl.sending}
-          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-destructive bg-card text-destructive" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><AppIcons.stop class="size-5" /></button>
-        {:else if sending}
+             outline + colored glyph. While a turn RUNS the circle keeps its
+             STOP form; the moment the user types/records, it morphs into the
+             ENVELOPE (deliver to mailbox). Otherwise: blue send / muted
+             attach, never a solid colored fill. -->
+        {#if action === 'awaiting-send'}
+          <!-- A prompt is en route to the mailbox (RPC then server confirm):
+               the composer is locked and shows a spinner until the user
+               bubble appears from the server's message-added event. -->
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span></button>
-        {:else if canSend()}
-          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void send()}><AppIcons.send class="size-5" /></button>
+        {:else if action === 'deliver'}
+          <button
+            type="button"
+            bind:this={envelopeBtnEl}
+            class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary"
+            title={t('deliver')}
+            aria-label={t('deliver')}
+            onclick={() => void submit()}
+          ><AppIcons.mail class="size-5" /></button>
+        {:else if action === 'stop'}
+          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-destructive bg-card text-destructive" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><AppIcons.stop class="size-5" /></button>
+        {:else if action === 'submitting'}
+          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span></button>
+        {:else if action === 'send'}
+          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void submit()}><AppIcons.send class="size-5" /></button>
         {:else}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground" title={t('attach')} aria-label={t('attach')} onclick={() => (attachOpen = true)}><AppIcons.add class="size-5" /></button>
         {/if}
@@ -699,85 +889,34 @@
         </div>
       </div>
     {/if}
+
+    <!-- flying letter: the envelope glyph animates from the composer button to
+         the top-bar mailbox button after a delivery. -->
+    {#if flyFrom && flyTo}
+      <div
+        bind:this={flyEl}
+        class="pointer-events-none fixed z-[80] flex size-7 items-center justify-center rounded-full border border-primary bg-card text-primary shadow-md"
+        style="left: {flyFrom.x}px; top: {flyFrom.y}px; transform: translate(-50%,-50%)"
+      >
+        <AppIcons.mail class="size-4" />
+      </div>
+    {/if}
   </div>
 
   <!-- session info dialog -->
-  <Dialog bind:open={infoOpen} title={t('sessionInfo')}>
-    {#snippet children()}
-      <div class="space-y-2">
-        <div class="flex items-center gap-2">
-          <AppIcons.chat class="size-4 text-primary" />
-          <span class="truncate text-meta font-bold">{session?.id}</span>
-        </div>
-        {#each [
-          [t('modelLabel'), session?.model || t('none')],
-          [t('variantLabel'), session?.variant || t('variantNone')],
-          [t('presetLabel'), session?.preset || t('none')],
-          [t('agentLocale'), session?.locale || t('agentLocaleFollow')],
-        ] as [label, value] (label)}
-          <div class="flex items-start gap-3 border-t border-border/40 pt-2 first:border-t-0 first:pt-0">
-            <span class="w-24 shrink-0 text-micro text-muted-foreground">{label}</span>
-            <span class="min-w-0 flex-1 text-meta font-semibold">{value}</span>
-          </div>
-        {/each}
-      </div>
-    {/snippet}
-    {#snippet footer()}
-      <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (infoOpen = false)}>{t('close')}</button>
-      <button
-        type="button"
-        class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80"
-        onclick={() => {
-          infoOpen = false
-          void showSettings()
-        }}
-      >{t('edit')}</button>
-    {/snippet}
-  </Dialog>
+  <ChatInfoDialog bind:open={infoOpen} {session} onEdit={() => void showSettings()} />
 
   <!-- settings dialog -->
-  <Dialog bind:open={settingsOpen} title={t('settingsTitle')}>
-    {#snippet children()}
-      <div class="space-y-3">
-        <label class="block">
-          <span class="mb-1 block text-meta text-muted-foreground">{t('modelLabel')}</span>
-          <Select
-            bind:value={selectedRef}
-            placeholder={loadingModels ? t('loading') : t('none')}
-            items={modelOptions}
-          />
-        </label>
-        {#if variantsForModel.length}
-          <label class="block">
-            <span class="mb-1 block text-meta text-muted-foreground">{t('variantLabel')}</span>
-            <Select
-              bind:value={variant}
-              items={[{ value: '', label: t('variantNone') }, ...variantsForModel.map(v => ({ value: v.id, label: v.name || v.id }))]}
-            />
-          </label>
-        {/if}
-        <label class="block">
-          <span class="mb-1 block text-meta text-muted-foreground">{t('presetLabel')}</span>
-          <Select bind:value={preset} items={presetOptions.map(id => ({ value: id, label: id }))} />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-meta text-muted-foreground">{t('agentLocale')}</span>
-          <Select
-            bind:value={locale}
-            items={[
-              { value: '', label: t('agentLocaleFollow') },
-              { value: 'zh', label: '中文' },
-              { value: 'en', label: 'English' },
-            ]}
-          />
-        </label>
-        <p class="text-micro text-muted-foreground">{t('turnsByPreset')}</p>
-        <p class="text-micro text-muted-foreground">{t('sysPromptByPreset')}</p>
-      </div>
-    {/snippet}
-    {#snippet footer()}
-      <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (settingsOpen = false)}>{t('cancel')}</button>
-      <button type="button" class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80" onclick={() => void applySettings()}>{t('save')}</button>
-    {/snippet}
-  </Dialog>
+  <ChatSettingsDialog
+    bind:open={settingsOpen}
+    bind:selectedRef
+    bind:variant
+    bind:preset
+    bind:locale
+    {loadingModels}
+    {modelOptions}
+    variants={variantsForModel}
+    {presetOptions}
+    onSave={() => void applySettings()}
+  />
 {/if}

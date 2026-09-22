@@ -10,7 +10,7 @@
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { AppIcons } from '$lib/icons'
   import { Select } from '$lib/components/ui/select'
-  import { parseToolParams } from '$lib/models'
+  import { parseToolParams } from '$lib/tool-params'
 
   let { store }: { store: AppStore } = $props()
 
@@ -25,8 +25,8 @@
     void (async () => {
       try {
         tools = await store.api.tools(Prefs.effectiveAgentLocale(getLocale() === 'zh'))
-      } catch {
-        /* offline */
+      } catch (e) {
+        showErrorToast(t('loadError', { e: String(e) }))
       }
       try {
         config = await store.api.toolConfig()

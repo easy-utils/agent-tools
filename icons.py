@@ -262,6 +262,8 @@ AREA_FILES: dict[str, dict[str, list[str]]] = {
             "agent-flutter/lib/screens/config.dart",
             # preset editor (reached from config) — its own file.
             "agent-flutter/lib/screens/preset_form.dart",
+            # mailbox overlay (chat_overlay) — own file, classified glyphs.
+            "agent-flutter/lib/screens/overlays.dart",
         ],
         "compose": [
             "agent-compose/src/commonMain/kotlin/com/agent/app/ui/ConfigScreen.kt",
@@ -301,11 +303,12 @@ AREA_SLOTS: dict[str, set[str]] = {
     },
     "session_list": {
         "add", "back", "chevron_down", "chevron_up", "circle", "close",
-        "delete", "list", "search", "success",
+        "delete", "fork", "list", "search", "success",
     },
     "config": {
-        "add", "back", "chevron_down", "chevron_right", "chevron_up",
-        "circle", "delete", "globe", "language", "palette", "server", "sparkles",
+        "add", "back", "bolt", "chat", "chevron_down", "chevron_right",
+        "chevron_up", "circle", "delete", "globe", "language", "palette",
+        "server", "sparkles", "stop", "user",
         "star", "success", "swap", "target", "tools",
     },
     "providers": {

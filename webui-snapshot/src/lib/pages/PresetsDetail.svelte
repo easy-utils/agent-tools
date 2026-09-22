@@ -8,6 +8,8 @@
   import { Prefs } from '$lib/prefs'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { confirmDialog } from '$lib/dialogs'
+  import { Input } from '$lib/components/ui/input'
+  import { Textarea } from '$lib/components/ui/textarea'
 
   let { store }: { store: AppStore } = $props()
 
@@ -143,15 +145,15 @@
       <div class="mb-3 text-sm font-semibold">{t('editPreset')}</div>
       <label class="mb-3 block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('presetId')}</span>
-        <input bind:value={editId} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+        <Input bind:value={editId} />
       </label>
       <label class="mb-3 block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('systemPrompt')}</span>
-        <textarea bind:value={editPrompt} rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"></textarea>
+        <Textarea bind:value={editPrompt} rows={4} />
       </label>
       <label class="block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('maxTurns')}</span>
-        <input bind:value={editTurns} type="number" min="1" class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+        <Input bind:value={editTurns} type="number" min="1" />
       </label>
       <div class="mt-4 flex justify-end gap-2">
         <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (editing = null)}>{t('cancel')}</button>

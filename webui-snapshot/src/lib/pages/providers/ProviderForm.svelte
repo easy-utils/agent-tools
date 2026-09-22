@@ -8,9 +8,11 @@
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import { loadModelsDev, npmToType, type MdProvider } from '$lib/modelsdev'
   import { Select } from '$lib/components/ui/select'
+  import { Input } from '$lib/components/ui/input'
   import CapabilityIcon from './CapabilityIcon.svelte'
   import { apiTypeLabelKey, apiTypesForCapability, capabilityLabelKey } from './common'
   import ModelRow from './ModelRow.svelte'
+  import PageHeader from '$lib/components/layout/PageHeader.svelte'
 
   let { store, showBack = false }: PageProps = $props()
 
@@ -138,19 +140,15 @@
   </div>
 {:else}
   <div class="flex h-full w-full flex-col">
-    <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
-      {#if showBack}
-        <button
-          type="button"
-          class="rounded p-1.5 hover:bg-muted"
-          onclick={() => {
+    <PageHeader
+      title={draft.originalId ? t('settingsTitle') : t('addProvider')}
+      onBack={showBack
+        ? () => {
             store.endProviderDraft()
             store.popPage()
-          }}
-        ><AppIcons.back class="size-[18px]" /></button>
-      {/if}
-      <span class="text-sm font-semibold">{draft.originalId ? t('settingsTitle') : t('addProvider')}</span>
-    </header>
+          }
+        : null}
+    />
 
     <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
       <button
@@ -164,7 +162,7 @@
 
       <label class="block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('providerIdReq')}</span>
-        <input bind:value={id} disabled={!!draft.originalId} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring disabled:opacity-50" />
+        <Input bind:value={id} disabled={!!draft.originalId} />
       </label>
 
       <label class="block">
@@ -174,12 +172,12 @@
 
       <label class="block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('baseUrlReq')}</span>
-        <input bind:value={url} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+        <Input bind:value={url} />
       </label>
 
       <label class="block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('apiKeyReq')}</span>
-        <input bind:value={key} type="password" class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+        <Input bind:value={key} type="password" />
       </label>
 
       <div class="flex items-center pt-2">
@@ -220,11 +218,7 @@
   <div class="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 sm:items-center" role="presentation" onclick={() => (templateOpen = false)}>
     <div class="flex h-[70vh] w-[min(92vw,520px)] flex-col rounded-lg border border-border bg-card shadow-xl" onclick={e => e.stopPropagation()} role="presentation">
       <div class="border-b border-border p-3">
-        <input
-          bind:value={templateQuery}
-          class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
-          placeholder={t('search')}
-        />
+        <Input bind:value={templateQuery} placeholder={t('search')} />
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto py-1">
         {#each filteredTemplates as p (p.npm)}

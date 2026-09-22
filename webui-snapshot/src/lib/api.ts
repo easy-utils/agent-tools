@@ -1,17 +1,31 @@
 // AgentApi — a faithful port of flutter/lib/api.dart over the latest
 // @abcp/agent-sdk (codegenv2: Struct→JsonObject, int64→bigint).
+//
+// The pure pb↔model mappers and the XHR upload helper live in api-mappers.ts.
+
 import type { AgentClient } from './agent'
 import { createAgentClient } from './agent'
-import { fireAuthExpired, isAuthError, makeStreamEvent, type StreamEvent } from './events'
+import {
+  encodeIngestRequest,
+  messageFromPb,
+  n,
+  sessionFromPb,
+  uploadIngest,
+  valueToJson,
+} from './api-mappers'
+import {
+  fireAuthExpired,
+  isAuthError,
+  makeStreamEvent,
+  type StreamEvent,
+} from './events'
 import type {
   Identity,
   MailboxEntry,
   Message,
-  MessagePart,
   ModelInfo,
   Preset,
   ProviderInfo,
-  ProviderModel,
   Session,
   ToolConfig,
   ToolConfigField,
@@ -21,186 +35,6 @@ import type {
   UploadedFileSource,
 } from './models'
 import { modelRefOf } from './models'
-
-const n = (v: bigint | number | undefined | null): number =>
-  v == null ? 0 : typeof v === 'bigint' ? Number(v) : v
-
-function decodeJson(data: string): Record<string, unknown> {
-  if (!data) return {}
-  try {
-    const v = JSON.parse(data)
-    return v && typeof v === 'object' && !Array.isArray(v)
-      ? (v as Record<string, unknown>)
-      : {}
-  } catch {
-    return {}
-  }
-}
-
-// ---- pb → model mappers (agent native) ----
-
-/** google.protobuf.Value (kind oneof) → plain JSON value. */
-function valueToJson(v: unknown): unknown {
-  if (!v || typeof v !== 'object') return null
-  const k = (v as { kind?: { case?: string; value?: unknown } }).kind
-  if (!k || !k.case) return null
-  switch (k.case) {
-    case 'nullValue':
-      return null
-    case 'numberValue':
-    case 'stringValue':
-    case 'boolValue':
-      return k.value
-    case 'listValue':
-      return ((k.value as { values?: unknown[] })?.values ?? []).map(valueToJson)
-    case 'structValue':
-      return structToJson(k.value)
-    default:
-      return null
-  }
-}
-
-function structToJson(v: unknown): Record<string, unknown> {
-  const fields = (v as { fields?: Record<string, unknown> })?.fields
-  if (!fields) return {}
-  const out: Record<string, unknown> = {}
-  for (const [k, val] of Object.entries(fields)) out[k] = valueToJson(val)
-  return out
-}
-
-export function sessionFromPb(s: import('@abcp/agent-sdk').Session): Session {
-  return {
-    id: s.name,
-    org: s.org,
-    repo: s.repo,
-    branch: s.branch,
-    model: s.model,
-    variant: s.variant,
-    preset: s.preset,
-    tipId: s.tipId || undefined,
-    maxTurns: s.maxTurns || undefined,
-    systemPrompt: s.systemPrompt || undefined,
-    locale: s.locale || undefined,
-    inputTokens: s.inputTokens,
-    outputTokens: s.outputTokens,
-    totalTokens: s.totalTokens,
-    lastInputTokens: s.lastInputTokens,
-    lastOutputTokens: s.lastOutputTokens,
-    createdAt: s.createdAt,
-    updatedAt: s.updatedAt,
-    unreadCount: s.unreadCount,
-    lastMessageAt: s.lastMessageAt,
-    lastMessagePreview: s.lastMessagePreview,
-    messageSeq: s.messageSeq,
-    group: s.group,
-  }
-}
-
-type PbPart = {
-  id: string
-  messageId: string
-  type: string
-  data: string
-}
-
-type PbMessage = {
-  id: string
-  role: string
-  createdAt: string
-  prevId: string
-  parts: PbPart[]
-}
-
-export function messageFromPb(m: PbMessage): Message {
-  // Pair each tool call with its result (tool_use_id) so history renders one
-  // tool card per call — matching the live stream shape.
-  const decoded = m.parts.map(p => [p, decodeJson(p.data)] as const)
-  const results: Record<string, Record<string, unknown>> = {}
-  for (const [p, d] of decoded) {
-    if (p.type === 'tool_result') {
-      const id = d['tool_use_id'] as string | undefined
-      if (id) results[id] = d
-    }
-  }
-  const parts: MessagePart[] = []
-  for (const [p, d] of decoded) {
-    switch (p.type) {
-      case 'text':
-        parts.push({ id: p.id, type: 'text', text: (d['text'] as string) || '' })
-        break
-      case 'reasoning':
-        parts.push({ id: p.id, type: 'reasoning', text: (d['text'] as string) || '' })
-        break
-      case 'summary':
-      case 'compaction':
-        parts.push({ id: p.id, type: 'compaction', text: (d['summary'] as string) || '' })
-        break
-      case 'file':
-        parts.push({
-          id: p.id,
-          type: 'file',
-          code: (d['code'] as string) || '',
-          name: (d['name'] as string) || '',
-          mime: d['mime'] as string | undefined,
-          size: d['size'] != null ? Number(d['size']) : undefined,
-          width: d['width'] != null ? Number(d['width']) : undefined,
-          height: d['height'] != null ? Number(d['height']) : undefined,
-          durationMs:
-            d['duration_ms'] != null
-              ? Number(d['duration_ms'])
-              : d['durationMs'] != null
-                ? Number(d['durationMs'])
-                : undefined,
-          thumbCode: (d['thumb_code'] as string | undefined) ?? (d['thumbCode'] as string | undefined),
-          thumbhash: (d['thumbhash'] as string | undefined) ?? undefined,
-        })
-        break
-      case 'tool': {
-        const callId = (d['id'] as string) || p.messageId
-        const res = results[callId]
-        const content = res?.['content']
-        parts.push({
-          id: p.id,
-          type: 'tool',
-          tool: (d['name'] as string) || '',
-          toolCallId: callId,
-          state: {
-            status: res ? 'complete' : 'running',
-            title: (d['name'] as string) || '',
-            input: (d['input'] as Record<string, unknown>) || null,
-            output: typeof content === 'string' ? content : null,
-            data: (res?.['metadata'] as Record<string, unknown>) || null,
-          },
-        })
-        break
-      }
-      case 'tool_result': {
-        const id = (d['tool_use_id'] as string) || p.messageId
-        if (results[id] && m.parts.some(q => q.type === 'tool')) break
-        const content = d['content']
-        parts.push({
-          id: p.id,
-          type: 'tool',
-          tool: '',
-          toolCallId: id,
-          state: {
-            status: 'complete',
-            title: '',
-            output: typeof content === 'string' ? content : null,
-          },
-        })
-        break
-      }
-    }
-  }
-  return {
-    id: m.id,
-    role: m.role,
-    createdAt: m.createdAt || null,
-    prevId: m.prevId,
-    parts,
-  }
-}
 
 // ---- the facade ----
 
@@ -292,12 +126,22 @@ export class AgentApi {
     return r.session ? sessionFromPb(r.session) : emptySession('')
   }
 
-  async prompt(id: string, prompt: string, attachments: string[] = []): Promise<string> {
+  async prompt(
+    id: string,
+    prompt: string,
+    attachments: string[] = [],
+  ): Promise<string> {
     // File codes MUST be forwarded as attachment refs; omitting them silently
     // drops every picked image / file / recording.
-    for await (const ev of this._c.prompt({ id, prompt, attachments: attachments.map(code => ({ code })) })) {
+    for await (const ev of this._c.prompt({
+      id,
+      prompt,
+      attachments: attachments.map(code => ({ code })),
+    })) {
       if (ev.event === 'accepted') {
-        return ((ev.params as Record<string, unknown>)['message_id'] as string) || ''
+        return (
+          ((ev.params as Record<string, unknown>)['message_id'] as string) || ''
+        )
       }
     }
     return ''
@@ -305,16 +149,39 @@ export class AgentApi {
 
   // ---- attachment upload / download ----
 
-  async uploadFile(src: UploadedFileSource): Promise<UploadedFile> {
+  /**
+   * Upload a file's bytes (IngestFile) reporting REAL byte-level progress.
+   *
+   * The Connect client has no upload-progress hook (fetch cannot report
+   * request-body progress), so this issues the equivalent Connect-UNARY
+   * request by hand with XMLHttpRequest: `Content-Type: application/proto`
+   * plus the bare protobuf message body — byte-for-byte what
+   * `createConnectTransport(useBinaryFormat: true)` sends for a unary call.
+   * `xhr.upload.onprogress` then gives true `loaded/total` (including the
+   * client's own send buffer), which is what makes the attachment tile's
+   * "42%" honest rather than a fake timer. Falls back to the typed client
+   * where XHR upload progress is unavailable.
+   *
+   * No mime is sent: the agent derives the authoritative type from the bytes.
+   */
+  async uploadFile(
+    src: UploadedFileSource,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<UploadedFile> {
     const bytes = src.bytes
-    if (!bytes || !bytes.length) throw new Error(`attachment has no bytes: ${src.name}`)
-    // No mime is sent: the agent derives the content type from the bytes and
-    // returns the authoritative value, which we adopt for local rendering.
-    const r = await this._c.ingestFile({ data: bytes, name: src.name })
+    if (!bytes?.length) throw new Error(`attachment has no bytes: ${src.name}`)
+    const req = encodeIngestRequest(bytes, src.name)
+    const out = await uploadIngest(
+      this.baseUrl,
+      this.token,
+      req,
+      onProgress,
+      () => this._c.ingestFile({ data: bytes, name: src.name }),
+    )
     return {
-      code: r.code,
+      code: out.code,
       name: src.name,
-      mime: r.mime || src.mimeType,
+      mime: out.mime || src.mimeType,
       size: bytes.length,
       deduped: false,
       localPath: '',
@@ -358,7 +225,9 @@ export class AgentApi {
   async fetchFileBlob(code: string): Promise<Blob> {
     const bytes = await this.fetchFileBytes(code)
     const meta = await this.fileHead(code)
-    return new Blob([new Uint8Array(bytes)], { type: meta.contentType || 'application/octet-stream' })
+    return new Blob([new Uint8Array(bytes)], {
+      type: meta.contentType || 'application/octet-stream',
+    })
   }
 
   async fileHead(code: string): Promise<{
@@ -384,7 +253,11 @@ export class AgentApi {
 
   // ---- messages ----
 
-  async messages(id: string, before?: string, limit = 30): Promise<[Message[], boolean]> {
+  async messages(
+    id: string,
+    before?: string,
+    limit = 30,
+  ): Promise<[Message[], boolean]> {
     const r = await this._c.listMessages({ id, limit, before: before ?? '' })
     const msgs = r.messages.map(messageFromPb)
     return [msgs, msgs.length >= limit]
@@ -410,19 +283,21 @@ export class AgentApi {
     return model
   }
 
-  async settings(id: string, settings: Record<string, unknown>): Promise<Session> {
-    const maxTurns = settings['max_turns'] as number | undefined
+  async settings(
+    id: string,
+    settings: Record<string, unknown>,
+  ): Promise<Session> {
     const model = (settings['model'] as string) || ''
     const preset = (settings['preset'] as string) || ''
-    const r = await this._guard(() => this._c.updateSettings({
-      id,
-      ...(model ? { model } : {}),
-      ...(preset ? { preset } : {}),
-      systemPrompt: (settings['system_prompt'] as string) || '',
-      locale: (settings['locale'] as string) || '',
-      variant: (settings['variant'] as string) || '',
-      ...(maxTurns && maxTurns > 0 ? { maxTurns } : {}),
-    }))
+    const r = await this._guard(() =>
+      this._c.updateSettings({
+        id,
+        ...(model ? { model } : {}),
+        ...(preset ? { preset } : {}),
+        locale: (settings['locale'] as string) || '',
+        variant: (settings['variant'] as string) || '',
+      }),
+    )
     return r.session ? sessionFromPb(r.session) : emptySession('')
   }
 
@@ -448,29 +323,58 @@ export class AgentApi {
   async state(id: string): Promise<[string, unknown[]]> {
     const r = await this._c.state({ id })
     const st = (r.state ?? {}) as Record<string, unknown>
-    return [(st['status'] as string) || 'idle', (st['parts'] as unknown[]) || []]
+    return [
+      (st['status'] as string) || 'idle',
+      (st['parts'] as unknown[]) || [],
+    ]
   }
 
-  async mailbox(id: string): Promise<MailboxEntry[]> {
-    const r = await this._c.mailbox({ id })
-    return r.mailbox.map(m => ({
-      id: m.id,
-      msgType: m.msgType,
-      payload: m.payload,
-      effectiveAt: m.effectiveAt || null,
-      status: m.status,
-      createdAt: m.createdAt,
-      consumedAt: m.consumedAt || null,
-    }))
+  /** One page of the mailbox, newest-first. `before` is the id of the oldest
+   *  entry the caller already holds ('' = the newest page); `hasMore` says
+   *  whether older entries remain. */
+  async mailbox(
+    id: string,
+    before = '',
+    limit = 0,
+  ): Promise<{ entries: MailboxEntry[]; hasMore: boolean }> {
+    const r = await this._c.mailbox({ id, before, limit })
+    return {
+      hasMore: r.hasMore,
+      entries: r.mailbox.map(m => ({
+        id: m.id,
+        msgType: m.msgType,
+        source: m.source,
+        payload: m.payload,
+        effectiveAt: m.effectiveAt || null,
+        status: m.status,
+        createdAt: m.createdAt,
+        consumedAt: m.consumedAt || null,
+      })),
+    }
   }
 
   // ---- streams ----
 
-  async *streamEvents(sessionId: string, since = ''): AsyncGenerator<StreamEvent> {
-    for await (const e of this._c.watchSession({ id: sessionId, since })) {
+  async *streamEvents(
+    sessionId: string,
+    since = '',
+    signal?: AbortSignal,
+  ): AsyncGenerator<StreamEvent> {
+    // The signal lets the controller tear down a HALF-OPEN stream (a socket
+    // that never errors but stops delivering) and reconnect from the anchor.
+    const opts = signal ? { signal } : undefined
+    for await (const e of this._c.watchSession(
+      { id: sessionId, since },
+      opts,
+    )) {
       const params = (e.params ?? {}) as Record<string, unknown>
       const runId = params['run_id']
-      yield makeStreamEvent(e.event, params, e.eid, typeof runId === 'string' ? runId : '')
+      yield makeStreamEvent(
+        e.event,
+        params,
+        e.eid,
+        typeof runId === 'string' ? runId : '',
+      )
     }
   }
 
@@ -490,11 +394,20 @@ export class AgentApi {
 
   // ---- config / providers / models / presets / tools ----
 
-  async setToolConfigValue(extId: string, name: string, value: unknown): Promise<void> {
+  async setToolConfigValue(
+    extId: string,
+    name: string,
+    value: unknown,
+  ): Promise<void> {
     await this._c.setExtensionConfig({
       extId,
       name,
-      value: { kind: { case: 'stringValue', value: value == null ? '' : String(value) } },
+      value: {
+        kind: {
+          case: 'stringValue',
+          value: value == null ? '' : String(value),
+        },
+      },
     })
   }
 
@@ -590,7 +503,9 @@ export class AgentApi {
   }
 
   async presets(locale?: string): Promise<Preset[]> {
-    const r = await this._guard(() => this._c.listPresets({ locale: locale ?? '' }))
+    const r = await this._guard(() =>
+      this._c.listPresets({ locale: locale ?? '' }),
+    )
     return r.presets.map(p => ({
       id: p.id,
       systemPrompt: p.systemPrompt,
@@ -617,7 +532,9 @@ export class AgentApi {
   }
 
   async tools(locale?: string): Promise<ToolInfo[]> {
-    const r = await this._guard(() => this._c.listTools({ locale: locale ?? '' }))
+    const r = await this._guard(() =>
+      this._c.listTools({ locale: locale ?? '' }),
+    )
     return r.tools.map(t => ({
       name: t.name,
       description: t.description,
@@ -702,5 +619,5 @@ export function emptySession(id: string): Session {
   }
 }
 
-export { modelRefOf }
 export type { ToolState }
+export { modelRefOf }

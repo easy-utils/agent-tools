@@ -1,2 +1,3 @@
 import textarea from './textarea.svelte'
-export { textarea }
+
+export { textarea, textarea as Textarea }

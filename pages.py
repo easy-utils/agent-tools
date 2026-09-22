@@ -94,8 +94,9 @@ CLIENTS: dict[str, dict] = {
     },
     "webui": {
         "root": str(WEBUI),
-        "tabs": [("src/lib/store.svelte.ts", r"SiderTab = '([a-z]+)' \| '([a-z]+)'")],
-        "page_keys": [("src/lib/store.svelte.ts", r"key: '([a-z_]+)'")],
+        # nav.ts owns the AppPage/SiderTab model (store re-exports it).
+        "tabs": [("src/lib/nav.ts", r"SiderTab = '([a-z]+)' \| '([a-z]+)'")],
+        "page_keys": [("src/lib/nav.ts", r"key: '([a-z_]+)'")],
         "dispatch": [("src/lib/Shell.svelte", r"case '([a-z_]+)':")],
         "config_sub": [("src/lib/pages/Config.svelte", r"id: '([a-z_]+)'")],
         "overlays": [("src/lib/Shell.svelte", r"(Mailbox)")],
@@ -161,8 +162,8 @@ DYNAMIC_PROBES: dict[str, list[tuple[str, str]]] = {
     "swiftui": [("Sources/agent-app/Core/AppStore.swift", r'config_sub_\\\('),
                 ("Sources/agent-app/Core/AppStore.swift", r'provider_model_\\\(')],
     # webui models dynamic keys as kinds with `key: string` (no literal prefix).
-    "webui": [("src/lib/store.svelte.ts", r"kind: 'config_sub'"),
-              ("src/lib/store.svelte.ts", r"kind: 'provider_models'")],
+    "webui": [("src/lib/nav.ts", r"kind: 'config_sub'"),
+              ("src/lib/nav.ts", r"kind: 'provider_models'")],
 }
 
 TITLE = "page/navigation contract"

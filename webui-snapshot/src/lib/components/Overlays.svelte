@@ -3,6 +3,8 @@
   // all rendered with the shadcn-svelte (bits-ui) primitives.
   import { Dialog } from '$lib/components/ui/dialog'
   import { AlertDialog } from '$lib/components/ui/alert-dialog'
+  import { Input } from '$lib/components/ui/input'
+  import { Textarea } from '$lib/components/ui/textarea'
   import { actionSheet as actionSheetStore, overlays, resolveConfirm, resolveDialog, resolveSheet } from '$lib/overlays.svelte'
   import { cn } from '$lib/utils'
 
@@ -26,18 +28,9 @@
 >
   {#snippet children()}
     {#if overlays.dialog?.multiline}
-      <textarea
-        bind:value={promptValue}
-        rows="4"
-        placeholder={overlays.dialog?.placeholder}
-        class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
-      ></textarea>
+      <Textarea bind:value={promptValue} rows={4} placeholder={overlays.dialog?.placeholder} />
     {:else}
-      <input
-        bind:value={promptValue}
-        placeholder={overlays.dialog?.placeholder}
-        class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
-      />
+      <Input bind:value={promptValue} placeholder={overlays.dialog?.placeholder} />
     {/if}
   {/snippet}
   {#snippet footer()}

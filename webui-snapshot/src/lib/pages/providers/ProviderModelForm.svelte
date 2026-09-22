@@ -7,8 +7,10 @@
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import { loadModelsDev } from '$lib/modelsdev'
   import { capabilityLabelKey } from './common'
+  import { Input } from '$lib/components/ui/input'
   import { AppIcons } from '$lib/icons'
   import CapabilityIcon from './CapabilityIcon.svelte'
+  import PageHeader from '$lib/components/layout/PageHeader.svelte'
 
   let { store, showBack = false, modelId = null }: PageProps & { modelId?: string | null } = $props()
 
@@ -104,13 +106,9 @@
   </div>
 {:else}
   <div class="flex h-full w-full flex-col">
-    <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
-      {#if showBack}
-        <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
-      {/if}
-      <span class="text-sm font-semibold">{isEdit ? t('editModel') : t('addModel')}</span>
+    <PageHeader title={isEdit ? t('editModel') : t('addModel')} onBack={showBack ? () => store.popPage() : null}>
       <button type="button" class="ml-auto text-sm text-primary disabled:opacity-40" disabled={!canSave} onclick={save}>{t('save')}</button>
-    </header>
+    </PageHeader>
 
     <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
       <label class="block">
@@ -118,12 +116,12 @@
           <span>{t('modelIdReq')}</span>
           <button type="button" class="text-primary underline" onclick={() => void autofill()}>{t('autofill')}</button>
         </span>
-        <input bind:value={mid} class="h-9 w-full rounded-md border border-input bg-transparent px-3 font-mono text-sm outline-none focus-visible:border-ring" />
+        <Input bind:value={mid} class="font-mono" />
       </label>
 
       <label class="block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('modelName')}</span>
-        <input bind:value={name} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+        <Input bind:value={name} />
       </label>
 
       <div class="flex items-center gap-2 rounded-md border border-input px-3 py-2.5">
@@ -134,7 +132,7 @@
       {#if capability === 'text'}
         <label class="block">
           <span class="mb-1 block text-meta text-muted-foreground">{t('contextLengthLabel')}</span>
-          <input bind:value={ctx} type="number" min="1" class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+          <Input bind:value={ctx} type="number" min="1" />
           <span class="mt-1 block text-micro text-muted-foreground">{t('contextOptional')}</span>
         </label>
       {:else}

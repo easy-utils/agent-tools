@@ -9,7 +9,9 @@
   import { getLocale } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { cn } from '$lib/utils'
-  import { AppIcons } from '$lib/icons'
+  import { Input } from '$lib/components/ui/input'
+  import { Textarea } from '$lib/components/ui/textarea'
+  import PageHeader from '$lib/components/layout/PageHeader.svelte'
 
   let { store, showBack = false }: PageProps = $props()
 
@@ -26,8 +28,8 @@
     void (async () => {
       try {
         tools = await store.api.tools(Prefs.effectiveAgentLocale(getLocale() === 'zh'))
-      } catch {
-        /* tools optional */
+      } catch (e) {
+        showErrorToast(t('loadError', { e: String(e) }))
       }
     })()
   })
@@ -61,26 +63,22 @@
 </script>
 
 <div class="flex h-full w-full flex-col">
-  <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
-    {#if showBack}
-      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
-    {/if}
-    <span class="text-sm font-semibold">{t('newPreset')}</span>
+  <PageHeader title={t('newPreset')} onBack={showBack ? () => store.popPage() : null}>
     <button type="button" class="ml-auto text-sm text-primary disabled:opacity-40" disabled={!canSave} onclick={() => void save()}>{t('save')}</button>
-  </header>
+  </PageHeader>
 
   <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
     <label class="block">
       <span class="mb-1 block text-meta text-muted-foreground">{t('presetId')}</span>
-      <input bind:value={id} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+      <Input bind:value={id} />
     </label>
     <label class="block">
       <span class="mb-1 block text-meta text-muted-foreground">{t('systemPrompt')}</span>
-      <textarea bind:value={sysPrompt} rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"></textarea>
+      <Textarea bind:value={sysPrompt} rows={4} />
     </label>
     <label class="block">
       <span class="mb-1 block text-meta text-muted-foreground">{t('maxTurns')}</span>
-      <input bind:value={maxTurns} type="number" min="1" class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+      <Input bind:value={maxTurns} type="number" min="1" />
     </label>
 
     <div>

@@ -9,6 +9,10 @@
   import { showErrorToast } from '$lib/toast.svelte'
   import CapabilityIcon from './CapabilityIcon.svelte'
   import { MODEL_CAPABILITIES, apiTypeLabelKey, capabilityLabelKey } from './common'
+  import PageHeader from '$lib/components/layout/PageHeader.svelte'
+  import IconButton from '$lib/components/layout/IconButton.svelte'
+  import SectionLabel from '$lib/components/layout/SectionLabel.svelte'
+  import EmptyState from '$lib/components/layout/EmptyState.svelte'
 
   let { store, showBack = false }: PageProps = $props()
 
@@ -35,8 +39,8 @@
       Object.keys(providers).forEach(k => delete providers[k])
       const p = await store.api.providers()
       for (const [k, v] of Object.entries(p)) providers[k] = v
-    } catch {
-      /* offline */
+    } catch (e) {
+      showErrorToast(t('loadError', { e: String(e) }))
     }
   }
 
@@ -103,12 +107,7 @@
 </script>
 
 <div class="flex h-full w-full flex-col">
-  <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
-    {#if showBack}
-      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
-    {/if}
-    <span class="text-sm font-semibold">{t('llmProviders')}</span>
-  </header>
+  <PageHeader title={t('llmProviders')} onBack={showBack ? () => store.popPage() : null} />
 
   <div class="min-h-0 flex-1 overflow-y-auto">
     {#if loading}
@@ -117,14 +116,14 @@
       </div>
     {:else}
       {#if allProviders.length === 0}
-        <p class="px-4 py-3 text-meta text-muted-foreground">{t('noProviders')}</p>
+        <EmptyState>{t('noProviders')}</EmptyState>
       {/if}
       <!-- ONE SECTION PER MODALITY (semantic grouping). Only TEXT carries the
            tenant default model. -->
       {#each MODEL_CAPABILITIES as cap (cap)}
-        <div class="flex items-center px-4 pt-4 pb-1">
-          <span class="min-w-0 flex-1 text-micro font-semibold tracking-wider text-muted-foreground uppercase">{capabilityLabel(cap)}</span>
-          <button type="button" class="rounded p-1 text-primary hover:bg-muted" title={t('addProvider')} onclick={() => add(cap)}><AppIcons.add class="size-4" /></button>
+        <div class="flex items-center pr-2">
+          <SectionLabel class="min-w-0 flex-1">{capabilityLabel(cap)}</SectionLabel>
+          <IconButton icon={AppIcons.add} label={t('addProvider')} variant="primary" class="p-1" onclick={() => add(cap)} />
         </div>
 
         {#if cap === 'text'}

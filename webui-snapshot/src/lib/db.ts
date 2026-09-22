@@ -8,7 +8,13 @@
 // When the worker cannot install the OPFS pool (e.g. a second tab already holds
 // it), the worker opens an in-memory DB instead, so the app still works
 // network-only.
-import type { ChatDraft, ChatMessage, Message, Session, UploadedFile } from './models'
+import type {
+  ChatDraft,
+  ChatMessage,
+  Message,
+  Session,
+  UploadedFile,
+} from './models'
 
 export interface LocalStore {
   readonly persistent: boolean
@@ -23,9 +29,17 @@ export interface LocalStore {
     msgs: Message[],
     opts: { replace: boolean; tipId: string },
   ): Promise<void>
-  persistMessages(sessionId: string, msgs: ChatMessage[], tipId: string): Promise<void>
+  persistMessages(
+    sessionId: string,
+    msgs: ChatMessage[],
+    tipId: string,
+  ): Promise<void>
   clearMessages(sessionId: string): Promise<void>
-  saveDraft(sessionId: string, text: string, attachments: UploadedFile[]): Promise<void>
+  saveDraft(
+    sessionId: string,
+    text: string,
+    attachments: UploadedFile[],
+  ): Promise<void>
   loadDrafts(): Promise<Record<string, ChatDraft>>
   loadReadSeqs(): Promise<Record<string, number>>
   setReadSeq(sessionId: string, seq: number): Promise<void>
@@ -38,11 +52,14 @@ type WorkerReply =
 class WorkerLocalStore implements LocalStore {
   persistent = false
   private nextId = 1
-  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>()
+  private pending = new Map<
+    number,
+    { resolve: (v: unknown) => void; reject: (e: unknown) => void }
+  >()
   private ready: Promise<void>
 
   constructor(private worker: Worker) {
-    this.ready = new Promise<void>((resolve, reject) => {
+    this.ready = new Promise<void>(resolve => {
       const onReady = (ev: MessageEvent<WorkerReply>) => {
         const m = ev.data
         if (m.type !== 'ready') return
@@ -53,7 +70,9 @@ class WorkerLocalStore implements LocalStore {
       }
       worker.addEventListener('message', onReady)
     })
-    worker.addEventListener('message', ev => this.onMessage(ev as MessageEvent<WorkerReply>))
+    worker.addEventListener('message', ev =>
+      this.onMessage(ev as MessageEvent<WorkerReply>),
+    )
   }
 
   private onMessage(ev: MessageEvent<WorkerReply>): void {
@@ -85,21 +104,37 @@ class WorkerLocalStore implements LocalStore {
   // The public surface mirrors the worker-side LocalStore. Each returns a
   // structured-clone-safe value (plain objects/arrays), which the worker
   // already produces.
-  upsertSessions = (s: Session[]) => this.call('upsertSessions', [s]).then(() => {}) as Promise<void>
+  upsertSessions = (s: Session[]) =>
+    this.call('upsertSessions', [s]).then(() => {}) as Promise<void>
   loadSessions = () => this.call('loadSessions', []) as Promise<Session[]>
-  removeSession = (id: string) => this.call('removeSession', [id]).then(() => {}) as Promise<void>
-  loadMessages = (sid: string) => this.call('loadMessages', [sid]) as Promise<ChatMessage[]>
-  serverTipId = (sid: string) => this.call('serverTipId', [sid]) as Promise<string>
-  oldestCachedId = (sid: string) => this.call('oldestCachedId', [sid]) as Promise<string>
-  applyServerMessages = (sid: string, msgs: Message[], opts: { replace: boolean; tipId: string }) =>
-    this.call('applyServerMessages', [sid, msgs, opts]).then(() => {}) as Promise<void>
+  removeSession = (id: string) =>
+    this.call('removeSession', [id]).then(() => {}) as Promise<void>
+  loadMessages = (sid: string) =>
+    this.call('loadMessages', [sid]) as Promise<ChatMessage[]>
+  serverTipId = (sid: string) =>
+    this.call('serverTipId', [sid]) as Promise<string>
+  oldestCachedId = (sid: string) =>
+    this.call('oldestCachedId', [sid]) as Promise<string>
+  applyServerMessages = (
+    sid: string,
+    msgs: Message[],
+    opts: { replace: boolean; tipId: string },
+  ) =>
+    this.call('applyServerMessages', [sid, msgs, opts]).then(
+      () => {},
+    ) as Promise<void>
   persistMessages = (sid: string, msgs: ChatMessage[], tipId: string) =>
-    this.call('persistMessages', [sid, msgs, tipId]).then(() => {}) as Promise<void>
-  clearMessages = (sid: string) => this.call('clearMessages', [sid]).then(() => {}) as Promise<void>
+    this.call('persistMessages', [sid, msgs, tipId]).then(
+      () => {},
+    ) as Promise<void>
+  clearMessages = (sid: string) =>
+    this.call('clearMessages', [sid]).then(() => {}) as Promise<void>
   saveDraft = (sid: string, text: string, atts: UploadedFile[]) =>
     this.call('saveDraft', [sid, text, atts]).then(() => {}) as Promise<void>
-  loadDrafts = () => this.call('loadDrafts', []) as Promise<Record<string, ChatDraft>>
-  loadReadSeqs = () => this.call('loadReadSeqs', []) as Promise<Record<string, number>>
+  loadDrafts = () =>
+    this.call('loadDrafts', []) as Promise<Record<string, ChatDraft>>
+  loadReadSeqs = () =>
+    this.call('loadReadSeqs', []) as Promise<Record<string, number>>
   setReadSeq = (sid: string, seq: number) =>
     this.call('setReadSeq', [sid, seq]).then(() => {}) as Promise<void>
 }

@@ -1,7 +1,7 @@
 // Prefs — the web port of flutter/lib/prefs.dart over localStorage.
 // (Drafts + read watermarks ALSO mirror into sqlite; this file holds the
 // connection, appearance, locale and backend-list state.)
-import { backendNameFor, type BackendCfg } from './models'
+import { type BackendCfg, backendNameFor } from './models'
 import { scopeOf } from './scope'
 
 const K_BASE = 'agent.baseUrl'

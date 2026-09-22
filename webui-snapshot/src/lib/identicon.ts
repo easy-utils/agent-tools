@@ -58,9 +58,12 @@ export function honeycombCells(seed: string, mirror: boolean): HexCell[] {
   }
   if (!mirror) return cells.map((c, i) => ({ ...c, on: bitAt(seed, i) }))
 
-  const key = (x: number, y: number) => `${(x * 1_000_000).toFixed(0)}|${(y * 1_000_000).toFixed(0)}`
+  const key = (x: number, y: number) =>
+    `${(x * 1_000_000).toFixed(0)}|${(y * 1_000_000).toFixed(0)}`
   const byCoord = new Map<string, number>()
-  cells.forEach((c, i) => byCoord.set(key(-c.x, c.y), i))
+  cells.forEach((c, i) => {
+    byCoord.set(key(-c.x, c.y), i)
+  })
   const on = new Array<boolean>(cells.length).fill(false)
   cells.forEach((c, i) => {
     if (on[i]) return
@@ -72,7 +75,11 @@ export function honeycombCells(seed: string, mirror: boolean): HexCell[] {
   return cells.map((c, i) => ({ ...c, on: on[i]! }))
 }
 
-function hsl(hue: number, sat: number, light: number): [number, number, number] {
+function hsl(
+  hue: number,
+  sat: number,
+  light: number,
+): [number, number, number] {
   const c = (1 - Math.abs(2 * light - 1)) * sat
   const hp = hue / 60
   const x = c * (1 - Math.abs((hp % 2) - 1))
@@ -100,7 +107,10 @@ function luminance([r, g, b]: [number, number, number]): number {
   return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
 }
 
-function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
+function contrastRatio(
+  a: [number, number, number],
+  b: [number, number, number],
+): number {
   const la = luminance(a)
   const lb = luminance(b)
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
@@ -128,6 +138,15 @@ export function avatarSpec(seed: string): AvatarSpec {
     }
     if (bestRatio >= 3.5) break
   }
-  const fgRgb = bestRatio < 3.0 ? (luminance(bgRgb) > 0.35 ? [23, 24, 28] : [255, 255, 255]) : best
-  return { bg: rgb(bgRgb), fg: rgb(fgRgb as [number, number, number]), hexes: honeycombCells(seed, true) }
+  const fgRgb =
+    bestRatio < 3.0
+      ? luminance(bgRgb) > 0.35
+        ? [23, 24, 28]
+        : [255, 255, 255]
+      : best
+  return {
+    bg: rgb(bgRgb),
+    fg: rgb(fgRgb as [number, number, number]),
+    hexes: honeycombCells(seed, true),
+  }
 }

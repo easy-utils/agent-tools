@@ -9,6 +9,8 @@
 // Only ONE context in the origin can hold the pool's sync access handles, so a
 // second tab's install fails; that failure is reported back and the caller
 // falls back to an in-memory database (network-only, no persistence).
+
+import type { Database } from '@sqlite.org/sqlite-wasm'
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm'
 import { LocalStore } from './local-store'
 
@@ -24,7 +26,7 @@ const post = (m: unknown) => (self as unknown as Worker).postMessage(m)
 
 async function init(scope: string): Promise<void> {
   const sqlite3 = await sqlite3InitModule()
-  let db
+  let db: Database
   let persistent = false
   try {
     const pool = await sqlite3.installOpfsSAHPoolVfs({
@@ -49,15 +51,20 @@ async function init(scope: string): Promise<void> {
 self.onmessage = (ev: MessageEvent<Msg>) => {
   const msg = ev.data
   if (msg.type === 'init') {
-    void init(msg.scope).catch(e => post({ type: 'ready', persistent: false, error: String(e) }))
+    void init(msg.scope).catch(e =>
+      post({ type: 'ready', persistent: false, error: String(e) }),
+    )
     return
   }
   if (msg.type === 'call') {
     void (async () => {
       try {
         if (!store) throw new Error('db not initialized')
-        const fn = (store as unknown as Record<string, (...a: unknown[]) => unknown>)[msg.method]
-        if (typeof fn !== 'function') throw new Error(`unknown method ${msg.method}`)
+        const fn = (
+          store as unknown as Record<string, (...a: unknown[]) => unknown>
+        )[msg.method]
+        if (typeof fn !== 'function')
+          throw new Error(`unknown method ${msg.method}`)
         const result = await fn.apply(store, msg.args)
         post({ type: 'result', id: msg.id, result })
       } catch (e) {

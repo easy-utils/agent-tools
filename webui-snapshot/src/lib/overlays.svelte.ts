@@ -100,7 +100,13 @@ export function actionSheet(opts: {
   actions: { value: string; label: string; destructive?: boolean }[]
 }): Promise<string | null> {
   return new Promise(resolve => {
-    overlays.sheet = { kind: 'sheet', id: ++seq, title: opts.title, actions: opts.actions, resolve }
+    overlays.sheet = {
+      kind: 'sheet',
+      id: ++seq,
+      title: opts.title,
+      actions: opts.actions,
+      resolve,
+    }
   })
 }
 

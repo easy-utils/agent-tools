@@ -8,7 +8,6 @@
   import { Prefs } from '$lib/prefs'
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import type { Preset, ToolInfo } from '$lib/models'
-  import { parseToolParams } from '$lib/models'
   import { Select } from '$lib/components/ui/select'
   import { Dialog } from '$lib/components/ui/dialog'
   import { actionSheet } from '$lib/dialogs'
@@ -16,6 +15,9 @@
   import BackendsDetail from './BackendsDetail.svelte'
   import PresetsDetail from './PresetsDetail.svelte'
   import ToolsDetail from './ToolsDetail.svelte'
+  import PageHeader from '$lib/components/layout/PageHeader.svelte'
+  import IconButton from '$lib/components/layout/IconButton.svelte'
+  import SectionLabel from '$lib/components/layout/SectionLabel.svelte'
 
   let {
     store,
@@ -124,22 +126,18 @@
 </script>
 
 <div class="flex h-full w-full flex-col">
-  <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
-    {#if isDetail && showBack}
-      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
-    {/if}
-    <span class="text-sm font-semibold">{titleOf(initialId)}</span>
+  <PageHeader title={titleOf(initialId)} onBack={isDetail && showBack ? () => store.popPage() : null}>
     {#if isDetail && initialId === 'presets'}
-      <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('newPreset')} onclick={() => store.pushPage({ kind: 'preset_form', key: 'preset_form_new' })}><AppIcons.add class="size-[18px]" /></button>
+      <IconButton icon={AppIcons.add} label={t('newPreset')} variant="primary" class="ml-auto" onclick={() => store.pushPage({ kind: 'preset_form', key: 'preset_form_new' })} />
     {/if}
-  </header>
+  </PageHeader>
 
   <div class="min-h-0 flex-1 overflow-y-auto">
     {#if isDetail}
       {@render detail(initialId!)}
     {:else}
       {#each sections as s (s.title)}
-        <div class="px-4 pt-4 pb-1 text-micro font-semibold tracking-wider text-muted-foreground uppercase">{s.title}</div>
+        <SectionLabel>{s.title}</SectionLabel>
         {#each s.rows as r (r.label)}
           <button
             type="button"

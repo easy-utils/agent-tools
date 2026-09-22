@@ -23,7 +23,8 @@
     expanded = false,
     isChild = false,
     onTap,
-    onLongPress,
+    onMenuRequest,
+    menuOpen = false,
     onToggleExpand,
   }: {
     session: Session
@@ -37,9 +38,56 @@
     expanded?: boolean
     isChild?: boolean
     onTap?: () => void
-    onLongPress?: (() => void) | null
+    /** Open the row's context menu. Receives the ROW's viewport rect so the
+     *  menu anchors to this row (not the cursor) and the row can be
+     *  highlighted. Null disables it (e.g. select mode). */
+    onMenuRequest?: ((anchor: { top: number; bottom: number; left: number; right: number }) => void) | null
+    /** This row's context menu is open — highlight it so the target is
+     *  unambiguous. */
+    menuOpen?: boolean
     onToggleExpand?: () => void
   } = $props()
+
+  // Long-press (touch): 480ms hold without movement opens the context menu at
+  // the touch point. iOS Safari never fires `contextmenu`, so the timer is the
+  // ONLY mobile entry; Android fires both, and the click suppression below
+  // keeps the menu-open from also navigating into the session.
+  const LP_MS = 480
+  let lpTimer: ReturnType<typeof setTimeout> | null = null
+  let suppressTap = false
+
+  function rowAnchor(el: HTMLElement) {
+    const r = el.getBoundingClientRect()
+    return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }
+  }
+
+  function lpStart(e: TouchEvent) {
+    if (selectable || !onMenuRequest) return
+    const el = e.currentTarget as HTMLElement
+    lpTimer = setTimeout(() => {
+      lpTimer = null
+      suppressTap = true
+      navigator.vibrate?.(10)
+      onMenuRequest?.(rowAnchor(el))
+    }, LP_MS)
+  }
+
+  function lpCancel() {
+    if (lpTimer !== null) {
+      clearTimeout(lpTimer)
+      lpTimer = null
+    }
+  }
+
+  function lpEnd(e: TouchEvent) {
+    lpCancel()
+    if (suppressTap) {
+      // The long-press fired: swallow the trailing click/tap so the row does
+      // not ALSO open the session behind the menu.
+      e.preventDefault()
+      suppressTap = false
+    }
+  }
 
   /** WeChat-style relative label — one-to-one with flutter `wechatTime`. */
   function fmtTime(iso: string): string {
@@ -60,16 +108,28 @@
 <button
   type="button"
   class={cn(
-    'flex w-full items-center px-3 py-2 text-left transition-colors',
-    selected ? 'bg-primary/14' : isActive ? 'bg-primary/10' : 'hover:bg-muted/50',
+    'flex w-full items-center px-3 py-2 text-left transition-colors select-none [-webkit-touch-callout:none]',
+    selected
+      ? 'bg-primary/14'
+      : menuOpen
+        ? 'bg-muted'
+        : isActive
+          ? 'bg-primary/10'
+          : 'hover:bg-muted/50',
   )}
   onclick={onTap}
   oncontextmenu={e => {
-    if (onLongPress && !selectable) {
+    // Desktop right-click: open the ROW-anchored context menu instead of the
+    // browser's own.
+    if (onMenuRequest && !selectable) {
       e.preventDefault()
-      onLongPress()
+      onMenuRequest(rowAnchor(e.currentTarget as HTMLElement))
     }
   }}
+  ontouchstart={lpStart}
+  ontouchmove={lpCancel}
+  ontouchend={lpEnd}
+  ontouchcancel={lpCancel}
 >
   {#if isChild}
     <span class="flex w-2.5 shrink-0 justify-center">

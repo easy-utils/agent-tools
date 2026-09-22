@@ -3,30 +3,29 @@
 // unread read-watermarks, per-session chat drafts, provider draft, and the
 // per-tab navigation stacks.
 import type { AgentApi } from './api'
+import { connection } from './connection.svelte'
 import type { LocalStore } from './db'
+import { t } from './i18n.svelte'
 import type { ChatDraft, ProviderDraft, Session } from './models'
-import { draftFromProvider, FALLBACK_API_TYPE_CAPABILITIES, type ProviderInfo } from './models'
+import {
+  draftFromProvider,
+  FALLBACK_API_TYPE_CAPABILITIES,
+  type ProviderInfo,
+} from './models'
+import {
+  type AppPage,
+  popPage,
+  pushPage,
+  pushSibling,
+  rootPageFor,
+  type SessionOverlay,
+  type SiderTab,
+} from './nav'
 import { Prefs } from './prefs'
+import { showErrorToast } from './toast.svelte'
 
-export type SiderTab = 'chat' | 'config'
-export type SessionOverlay = 'mailbox'
-
-// ---- navigation model (navigation.dart) ----
-
-export type AppPage =
-  | { kind: 'chat_list'; key: 'chat_list' }
-  | { kind: 'chat_session'; key: 'chat_session' }
-  | { kind: 'chat_overlay'; key: 'chat_overlay'; overlay: SessionOverlay }
-  | { kind: 'config_root'; key: 'config_root' }
-  | { kind: 'config_sub'; key: string; id: string }
-  | { kind: 'providers_list'; key: 'providers_list' }
-  | { kind: 'preset_form'; key: 'preset_form_new' }
-  | { kind: 'provider_form'; key: 'provider_form' }
-  | { kind: 'provider_models'; key: string; modelId: string | null }
-
-export function rootPageFor(tab: SiderTab): AppPage {
-  return tab === 'chat' ? { kind: 'chat_list', key: 'chat_list' } : { kind: 'config_root', key: 'config_root' }
-}
+export type { AppPage, SessionOverlay, SiderTab } from './nav'
+export { rootPageFor } from './nav'
 
 export class AppStore {
   api: AgentApi
@@ -38,8 +37,6 @@ export class AppStore {
   sessionOverlay = $state<SessionOverlay | null>(null)
 
   sessionRevision = $state(0)
-  /** Last sessions-list load error ('' when healthy) — surfaced as a banner. */
-  sessionError = $state('')
 
   /** session → last read message_seq (client-local). */
   readSeqs: Record<string, number> = $state({})
@@ -53,7 +50,9 @@ export class AppStore {
 
   /** Capability matrix from ListProvidersCatalog (api type -> capabilities).
    * Seeded with the bundled fallback; refreshed from the server on demand. */
-  providerCatalog = $state<Record<string, string[]>>({ ...FALLBACK_API_TYPE_CAPABILITIES })
+  providerCatalog = $state<Record<string, string[]>>({
+    ...FALLBACK_API_TYPE_CAPABILITIES,
+  })
 
   async refreshProviderCatalog(): Promise<void> {
     try {
@@ -77,7 +76,6 @@ export class AppStore {
   private sessionTimer: ReturnType<typeof setTimeout> | null = null
   private sessionAttempt = 0
   private firstSnapshot = true
-  private static MAX_SESSION_ATTEMPTS = 20
 
   constructor(api: AgentApi, local: LocalStore | null) {
     this.api = api
@@ -119,15 +117,33 @@ export class AppStore {
     })()
   }
 
+  /** Tear down the live list stream (backend switch / logout). Not a
+   *  connection problem, so clear the banner too. */
+  dispose() {
+    this.sessionTimer && clearTimeout(this.sessionTimer)
+    this.sessionTimer = null
+    this.sessionAbort?.abort()
+    this.sessionAbort = null
+    connection.sessions = false
+  }
+
   private onSessionStreamClosed() {
-    if (this.sessionAttempt >= AppStore.MAX_SESSION_ATTEMPTS) return
+    // The list stream is down: surface the in-page reconnect banner.
+    connection.sessions = true
+    // Retry FOREVER (WeChat-style) with a capped backoff.
     const delay = Math.min(30, 1 << Math.min(this.sessionAttempt, 5))
     this.sessionAttempt++
     this.sessionTimer = setTimeout(() => this.startSessionWatch(), delay * 1000)
   }
 
-  private applySessionEvent(snapshot: boolean, upserts: Session[], removed: string[]) {
+  private applySessionEvent(
+    snapshot: boolean,
+    upserts: Session[],
+    removed: string[],
+  ) {
     this.sessionAttempt = 0
+    // A frame arrived: the list stream is healthy again.
+    connection.sessions = false
     if (snapshot) {
       this.sessions = [...upserts]
       // First ever snapshot on this device: seed read watermarks so historical
@@ -151,7 +167,9 @@ export class AppStore {
         if (i === -1) next.push(s)
         else next[i] = s
       }
-      this.sessions = removed.length ? next.filter(s => !removed.includes(s.id)) : next
+      this.sessions = removed.length
+        ? next.filter(s => !removed.includes(s.id))
+        : next
     }
     // The open session is being read live: advance its watermark so returning
     // to the list shows no stale badge.
@@ -160,7 +178,6 @@ export class AppStore {
       this.readSeqs[active.id] = active.messageSeq
       Prefs.saveReadSeqs(this.readSeqs)
     }
-    this.sessionError = ''
   }
 
   get activeSession(): Session | null {
@@ -171,13 +188,14 @@ export class AppStore {
     return this.sessions.find(s => s.id === id) ?? null
   }
 
-  /** Manual refresh (pull-to-refresh / fallback reconciliation). */
+  /** Manual refresh (pull-to-refresh / fallback reconciliation). Failures
+   *  surface as a toast (the long-lived stream banner already covers a dropped
+   *  connection; a manual refresh that fails is a one-shot action). */
   async refreshSessions() {
     try {
       this.sessions = await this.api.listSessions()
-      this.sessionError = ''
     } catch (e) {
-      this.sessionError = String(e)
+      showErrorToast(`${t('connectionError', { arg1: String(e) })}`)
     }
   }
 
@@ -235,7 +253,9 @@ export class AppStore {
     this.readSeqs[id] = seq
     Prefs.saveReadSeqs(this.readSeqs)
     void this.local?.setReadSeq(id, seq)
-    this.sessions = this.sessions.map(s => (s.id === id ? { ...s, unreadCount: 0 } : s))
+    this.sessions = this.sessions.map(s =>
+      s.id === id ? { ...s, unreadCount: 0 } : s,
+    )
   }
 
   unreadCountFor(s: Session): number {
@@ -269,7 +289,10 @@ export class AppStore {
     void this.local?.saveDraft(sessionId, d.text, d.attachments)
   }
 
-  saveDraftAttachments(sessionId: string, attachments: ChatDraft['attachments']) {
+  saveDraftAttachments(
+    sessionId: string,
+    attachments: ChatDraft['attachments'],
+  ) {
     const d = this.draftFor(sessionId)
     d.attachments = [...attachments]
     if (!d.text.trim() && !d.attachments.length) {
@@ -292,15 +315,17 @@ export class AppStore {
   }
 
   beginProviderDraft(existing: ProviderInfo | null, capability = 'text') {
-    this.providerDraft = existing ? draftFromProvider(existing) : {
-      originalId: null,
-      id: '',
-      capability,
-      apiType: 'openai-compatible',
-      baseUrl: '',
-      apiKey: '',
-      models: [],
-    }
+    this.providerDraft = existing
+      ? draftFromProvider(existing)
+      : {
+          originalId: null,
+          id: '',
+          capability,
+          apiType: 'openai-compatible',
+          baseUrl: '',
+          apiKey: '',
+          models: [],
+        }
   }
 
   endProviderDraft() {
@@ -356,29 +381,24 @@ export class AppStore {
 
   /** Push a page; same-key pages replace at their existing depth. */
   pushPage(page: AppPage) {
-    const list = this.currentStack
-    const idx = list.findIndex(p => p.key === page.key)
-    if (idx !== -1) list.splice(idx, list.length - idx)
-    list.push(page)
+    this.stacks[this.siderTab] = pushPage(this.currentStack, page)
   }
 
   /** Push a SIBLING drill-in (replaces the current drill-in, keeps stack at
    * [root, current] so the tablet split never shows two parallels). */
   pushSibling(page: AppPage) {
-    const list = this.currentStack
-    if (list.length > 1) list.splice(1, list.length - 1)
-    this.pushPage(page)
+    this.stacks[this.siderTab] = pushSibling(this.currentStack, page)
   }
 
   /** Pop the top page; never pops below the root. */
   popPage() {
-    const list = this.currentStack
-    if (list.length > 1) {
-      list.pop()
-      if (this.siderTab === 'chat' && list.length === 1) {
-        this.activeSessionId = null
-        this.sessionOverlay = null
-      }
+    const cur = this.currentStack
+    if (cur.length <= 1) return
+    const next = popPage(cur)
+    this.stacks[this.siderTab] = next
+    if (this.siderTab === 'chat' && next.length === 1) {
+      this.activeSessionId = null
+      this.sessionOverlay = null
     }
   }
 

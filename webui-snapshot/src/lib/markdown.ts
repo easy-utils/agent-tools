@@ -1,12 +1,28 @@
 // Markdown rendering — the web counterpart of flutter_markdown_plus +
 // re_highlight: marked with fenced-code highlight.js + DOMPurify sanitize.
-import { marked } from 'marked'
+
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
+import { marked } from 'marked'
 
 marked.setOptions({
   gfm: true,
   breaks: true,
+})
+
+// Model-authored links may carry target="_blank" (the sanitize allowlist
+// permits the attribute). Any such link must not get a window handle back:
+// force rel=noopener noreferrer on EVERY target=_blank anchor. Registered
+// ONCE at module scope — DOMPurify hooks accumulate globally, so a per-call
+// addHook would stack duplicate handlers.
+DOMPurify.addHook('afterSanitizeAttributes', node => {
+  if (node instanceof Element && node.getAttribute('target') === '_blank') {
+    const prev = node.getAttribute('rel')
+    const parts = new Set((prev ?? '').split(/\s+/).filter(Boolean))
+    parts.add('noopener')
+    parts.add('noreferrer')
+    node.setAttribute('rel', [...parts].join(' '))
+  }
 })
 
 export function renderMarkdown(src: string): string {
@@ -26,7 +42,9 @@ function highlightCodeBlocks(html: string): string {
     const lang = el.className.replace(/.*language-([\w+#-]+).*/, '$1')
     try {
       if (lang && hljs.getLanguage(lang)) {
-        el.innerHTML = hljs.highlight(el.textContent ?? '', { language: lang }).value
+        el.innerHTML = hljs.highlight(el.textContent ?? '', {
+          language: lang,
+        }).value
       } else {
         el.innerHTML = hljs.highlightAuto(el.textContent ?? '').value
       }

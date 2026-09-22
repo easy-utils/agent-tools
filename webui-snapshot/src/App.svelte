@@ -252,6 +252,8 @@
 
   async function switchBackend(b: BackendCfg) {
     const base = SAME_ORIGIN_BASE
+    // Tear down the previous connection's streams before replacing the store.
+    store?.dispose()
     Prefs.save(base, b.token)
     baseUrl = base
     token = b.token
@@ -280,6 +282,7 @@
 
   function logout() {
     Prefs.clearActive()
+    store?.dispose()
     token = ''
     store = null
     setupToken = ''

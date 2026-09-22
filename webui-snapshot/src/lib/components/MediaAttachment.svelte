@@ -10,7 +10,7 @@
   import { t } from '$lib/i18n.svelte'
   import {
     aspectRatio,
-    downloadFile,
+    downloadWithFeedback,
     fileIconSlot,
     formatBytes,
     formatDuration,
@@ -83,8 +83,7 @@
     thumbhash: ref.thumbhash ?? fetchedMeta?.thumbhash ?? null,
   })
   const needMeta = $derived(
-    fileProp != null &&
-      meta.width == null &&
+    meta.width == null &&
       meta.thumbCode == null &&
       meta.thumbhash == null &&
       (mimeVal?.startsWith('image/') ||
@@ -95,6 +94,9 @@
   let url = $state('')
   let thumbUrl = $state('')
   let imgError = $state(false)
+  // Download state for the document/file chip: null = idle, 0..100 = streaming,
+  // -1 = connecting (no total known yet). Drives the chip's spinner + percent.
+  let dlPct = $state<number | null>(null)
   let visible = $state(false)
   let tile: HTMLElement | null = $state(null)
 
@@ -166,12 +168,45 @@
     onTap?.()
     if (canView && codeVal) {
       openViewer(viewRef, siblings.length > 0 ? siblings : [viewRef])
+    } else if (serverCode && !canView) {
+      // Documents / archives have no preview: a click is a save-as, matching
+      // the bubble chip. (Previously the composer tile was simply disabled, so
+      // clicking it did nothing at all.)
+      void download()
     } else if (shown) {
       window.open(shown, '_blank')
     }
   }
 
+  /** Stream the file to disk, showing progress in the chip. */
+  async function download() {
+    if (dlPct !== null)
+      return // already running
+    dlPct = -1
+    await downloadWithFeedback(api, codeVal, nameVal, {
+      mime: mimeVal,
+      onProgress: (done, total) => {
+        dlPct = total > 0 ? Math.round((done / total) * 100) : -1
+      },
+    })
+    dlPct = null
+  }
+
+  /** Compact duration label for a video badge (m:ss / h:mm:ss). */
+  const badgeDuration = formatDuration
+
   const iconSlot = $derived(fileIconSlot(mimeVal, nameVal))
+
+  /** Decorative waveform bar heights (no audio analysis is available). Kept as
+   *  a constant and iterated by INDEX: a duplicate value in an unkeyed {#each}
+   *  over a number array collides on key and makes Svelte throw. */
+  const WAVE_BARS = [6, 12, 18, 10, 15, 7, 13, 9, 16, 8, 14, 11] as const
+  const WAVE_BARS_WIDE = [5, 9, 13, 7, 11, 15, 6, 12, 8, 14, 10, 16, 9, 13, 5, 11] as const
+
+  /** Short type label for the document tile (extension, upper-cased). */
+  const extLabel = $derived(
+    (nameVal.split('.').pop() ?? '').toUpperCase().slice(0, 5) || 'FILE',
+  )
 </script>
 
 {#snippet FileGlyph(cls: string)}
@@ -180,31 +215,66 @@
 {/snippet}
 
 {#if dimension}
-  <!-- composer tile -->
+  <!-- composer tile. ONE square slot per attachment, but the CONTENT is
+       type-specific (image thumbnail / video first-frame + play / audio
+       waveform + time / per-type document glyph + extension) so an attachment
+       is identifiable before it is sent.
+
+       bind:this matters: the shared lazy-loading effects (full media,
+       server metadata, thumbnail) are gated on `visible`, which the
+       IntersectionObserver only sets for an observed element — without the
+       binding the composer tile never resolved any of them and always fell
+       through to the generic branch. -->
   <button
     type="button"
+    bind:this={tile}
     class="relative shrink-0 overflow-hidden rounded-md border border-border/50 bg-muted"
     style="width:{dimension}px;height:{dimension}px"
     onclick={open}
-    disabled={!shown && !thumbUrl}
+    title={nameVal}
   >
-    {#if kind === 'image' && preview}
+    {#if kind === 'image'}
       {#if imgError}
         <AppIcons.image_off class="m-auto size-5 text-muted-foreground" />
-      {:else}
+      {:else if preview}
         <img src={preview} alt={nameVal} class="size-full object-cover" onerror={() => (imgError = true)} />
+      {:else}
+        <AppIcons.image class="m-auto size-5 text-muted-foreground" />
       {/if}
-    {:else if shown && kind === 'audio'}
-      <AppIcons.music class="m-auto size-5 text-muted-foreground" />
-    {:else if shown && kind === 'video'}
+    {:else if kind === 'video'}
       {#if thumbUrl}
         <img src={thumbUrl} alt={nameVal} class="size-full object-cover" />
+      {:else if placeholder}
+        <img src={placeholder} alt="" class="size-full scale-110 object-cover blur-lg" />
       {:else}
         <AppIcons.film class="m-auto size-5 text-muted-foreground" />
       {/if}
+      <!-- Play affordance, always on top of the poster. -->
+      <span class="absolute inset-0 flex items-center justify-center">
+        <AppIcons.play_round class="size-6 text-white/90 drop-shadow" />
+      </span>
+      {#if meta.durationMs}
+        <span class="absolute right-0.5 bottom-0.5 rounded bg-black/65 px-1 text-[9px] leading-[13px] font-medium text-white tabular-nums">
+          {badgeDuration(meta.durationMs)}
+        </span>
+      {/if}
+    {:else if kind === 'audio'}
+      <span class="flex size-full flex-col items-center justify-center gap-1">
+        <span class="flex items-end gap-px" aria-hidden="true">
+          {#each WAVE_BARS as h, i (i)}
+            <span class="w-0.5 rounded-full bg-primary/60" style="height:{h}px"></span>
+          {/each}
+        </span>
+        {#if meta.durationMs}
+          <span class="text-[9px] leading-none text-muted-foreground tabular-nums">{formatDuration(meta.durationMs)}</span>
+        {/if}
+      </span>
     {:else}
-      <span class="flex size-full flex-col items-center justify-center gap-0.5 text-micro text-muted-foreground">
-        <AppIcons.file class="size-4" />
+      <!-- document / archive / other: the type's own glyph + extension, so
+           zip / pdf / docx / xlsx are distinguishable at a glance. -->
+      <span class="flex size-full flex-col items-center justify-center gap-0.5 text-muted-foreground">
+        {@render FileGlyph('size-5 text-primary')}
+        <span class="max-w-full truncate px-0.5 text-[9px] leading-none font-medium">{extLabel}</span>
       </span>
     {/if}
   </button>
@@ -253,33 +323,62 @@
             <img src={thumbUrl} alt={nameVal} class="absolute inset-0 size-full object-cover" />
           {/if}
           <AppIcons.play_round class="relative size-10 text-white/90 drop-shadow" />
+          {#if meta.durationMs}
+            <!-- Duration badge, IM-standard (bottom-right of the poster). -->
+            <span class="absolute right-1.5 bottom-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[10px] leading-none font-medium text-white tabular-nums">
+              {badgeDuration(meta.durationMs)}
+            </span>
+          {/if}
         </button>
       {/if}
     {:else if kind === 'audio'}
       {#if shown}
         <audio src={shown} controls class="w-full min-w-56"></audio>
       {:else}
-        <button type="button" bind:this={tile} class="flex w-full min-w-56 items-center gap-2 rounded-md border border-border/50 bg-muted/50 px-3 py-2 text-meta" onclick={open}>
-          <AppIcons.play_round class="size-5" />
-          <span class="min-w-0 flex-1 truncate">{nameVal}</span>
-          {#if meta.durationMs}<span class="text-micro text-muted-foreground">{formatDuration(meta.durationMs)}</span>{/if}
+        <button type="button" bind:this={tile} class="flex h-9 w-full min-w-56 items-center gap-2 rounded-md border border-border/50 bg-muted/50 px-3 text-meta" onclick={open} title={nameVal}>
+          <AppIcons.play_round class="size-5 shrink-0" />
+          <!-- Decorative pseudo-waveform: a fixed, deterministic bar pattern
+               (no audio analysis available) so an audio card reads as audio at
+               a glance and keeps the same height as every other chip. -->
+          <span class="flex h-4 flex-1 items-center gap-px overflow-hidden" aria-hidden="true">
+            {#each WAVE_BARS_WIDE as h, i (i)}
+              <span class="w-0.5 shrink-0 rounded-full bg-muted-foreground/40" style="height:{h}px"></span>
+            {/each}
+          </span>
+          {#if meta.durationMs}<span class="shrink-0 text-micro text-muted-foreground tabular-nums">{formatDuration(meta.durationMs)}</span>{/if}
         </button>
       {/if}
     {:else}
-      <!-- document / previewable / generic file chip -->
+      <!-- document / previewable / generic file chip.
+           FIXED HEIGHT (h-9): the chip is a flex row whose optional parts
+           (size, eye/download affordance, download progress) must not change
+           its height as they appear — an inline chip that reflows shifts every
+           following card, unlike the image/video boxes which are locked by
+           aspect-ratio. -->
       <button
         type="button"
         bind:this={tile}
-        class="flex items-center gap-2 rounded-md border border-border/50 bg-muted/50 px-2.5 py-1.5 text-meta hover:bg-muted"
-        onclick={canView ? open : () => void downloadFile(api, codeVal, nameVal)}
+        class="flex h-9 items-center gap-2 rounded-md border border-border/50 bg-muted/50 px-2.5 text-meta hover:bg-muted disabled:opacity-60"
+        disabled={dlPct !== null}
+        onclick={canView ? open : () => void download()}
+        title={nameVal}
       >
-        {@render FileGlyph('size-4 text-primary')}
+        {@render FileGlyph('size-4 shrink-0 text-primary')}
         <span class="max-w-56 truncate">{nameVal}</span>
-        {#if size}<span class="text-micro text-muted-foreground">{formatBytes(size)}</span>{/if}
-        {#if canView}
-          <AppIcons.eye class="size-3.5 text-muted-foreground" />
+        {#if size}<span class="shrink-0 text-micro text-muted-foreground">{formatBytes(size)}</span>{/if}
+        {#if dlPct !== null}
+          <!-- Streaming to disk: percent when the total is known, otherwise a
+               spinner. Shown IN PLACE of the affordance so the width (and thus
+               the layout) stays put. -->
+          {#if dlPct >= 0}
+            <span class="shrink-0 text-micro text-muted-foreground tabular-nums">{dlPct}%</span>
+          {:else}
+            <span class="block size-3.5 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
+          {/if}
+        {:else if canView}
+          <AppIcons.eye class="size-3.5 shrink-0 text-muted-foreground" />
         {:else}
-          <AppIcons.download class="size-3 text-muted-foreground" />
+          <AppIcons.download class="size-3.5 shrink-0 text-muted-foreground" />
         {/if}
       </button>
     {/if}

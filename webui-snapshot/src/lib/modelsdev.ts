@@ -57,7 +57,9 @@ async function writeCache(providers: MdProvider[]) {
   }
 }
 
-export async function loadModelsDev(forceRefresh = false): Promise<MdProvider[]> {
+export async function loadModelsDev(
+  forceRefresh = false,
+): Promise<MdProvider[]> {
   if (!forceRefresh) {
     const cached = await readCache()
     if (cached) return cached.providers
@@ -66,7 +68,12 @@ export async function loadModelsDev(forceRefresh = false): Promise<MdProvider[]>
   if (!res.ok) throw new Error(`models.dev ${res.status}`)
   const json = (await res.json()) as Record<
     string,
-    { name?: string; description?: string; type?: string; models?: Record<string, Record<string, unknown>> }
+    {
+      name?: string
+      description?: string
+      type?: string
+      models?: Record<string, Record<string, unknown>>
+    }
   >
   const lim = (m: Record<string, unknown>): number | undefined => {
     const l = m['limit']
@@ -91,7 +98,13 @@ export async function loadModelsDev(forceRefresh = false): Promise<MdProvider[]>
         attachment: !!m['attachment'],
       })
     }
-    providers.push({ npm, name: p.name || npm, description: p.description, type: p.type, models })
+    providers.push({
+      npm,
+      name: p.name || npm,
+      description: p.description,
+      type: p.type,
+      models,
+    })
   }
   await writeCache(providers)
   return providers

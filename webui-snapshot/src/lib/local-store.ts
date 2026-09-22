@@ -6,103 +6,20 @@
 // the OPFS sync-access-handle VFS must not be used on the main thread, so the
 // main thread only talks to a `LocalStore` through the async proxy in db.ts.
 import type { Database, SqlValue } from '@sqlite.org/sqlite-wasm'
-import type { ChatDraft, ChatMessage, ChatPart, Message, MessagePart, Session, UploadedFile } from './models'
-
-// ---- JSON codecs (identical shapes to the Flutter store) ----
-
-function toolStateToJson(s: NonNullable<ChatPart['state']>): Record<string, unknown> {
-  const j: Record<string, unknown> = {}
-  if (s.status) j['status'] = s.status
-  if (s.title) j['title'] = s.title
-  if (s.error != null) j['error'] = s.error
-  if (s.input != null) j['input'] = s.input
-  if (s.output != null) j['output'] = s.output
-  if (s.data != null) j['data'] = s.data
-  if (s.changeId != null) j['change_id'] = s.changeId
-  if (s.diff != null) j['diff'] = s.diff
-  if (s.additions != null) j['additions'] = s.additions
-  if (s.deletions != null) j['deletions'] = s.deletions
-  return j
-}
-
-function toolStateFromJson(j: Record<string, unknown> | null | undefined): ChatPart['state'] {
-  if (!j) return null
-  return {
-    status: (j['status'] as string) || '',
-    title: (j['title'] as string) || '',
-    error: (j['error'] as string) ?? null,
-    input: (j['input'] as Record<string, unknown>) ?? null,
-    output: (j['output'] as string) ?? null,
-    data: (j['data'] as Record<string, unknown>) ?? null,
-    changeId: (j['change_id'] as string) ?? null,
-    diff: (j['diff'] as string) ?? null,
-    additions: (j['additions'] as number) ?? null,
-    deletions: (j['deletions'] as number) ?? null,
-  }
-}
-
-function partToJson(p: ChatPart): Record<string, unknown> {
-  const j: Record<string, unknown> = { id: p.id, type: p.type }
-  if (p.text) j['text'] = p.text
-  if (p.tool) j['tool'] = p.tool
-  if (p.state) j['state'] = toolStateToJson(p.state)
-  if (p.code != null) j['code'] = p.code
-  if (p.name != null) j['name'] = p.name
-  if (p.mime != null) j['mime'] = p.mime
-  if (p.size != null) j['size'] = p.size
-  return j
-}
-
-function chatPartFromJson(j: Record<string, unknown>): ChatPart {
-  return {
-    id: (j['id'] as string) || '',
-    type: (j['type'] as string) || '',
-    text: (j['text'] as string) || '',
-    tool: (j['tool'] as string) || '',
-    state: toolStateFromJson(j['state'] as Record<string, unknown> | null),
-    code: (j['code'] as string) ?? null,
-    name: (j['name'] as string) ?? null,
-    mime: (j['mime'] as string) ?? null,
-    size: j['size'] != null ? Number(j['size']) : null,
-  }
-}
-
-function messagePartToJson(p: MessagePart): Record<string, unknown> {
-  const j: Record<string, unknown> = { id: p.id, type: p.type }
-  if (p.text != null) j['text'] = p.text
-  if (p.tool != null) j['tool'] = p.tool
-  if (p.toolCallId != null) j['tool_call_id'] = p.toolCallId
-  if (p.state) j['state'] = toolStateToJson(p.state)
-  if (p.code != null) j['code'] = p.code
-  if (p.name != null) j['name'] = p.name
-  if (p.mime != null) j['mime'] = p.mime
-  if (p.size != null) j['size'] = p.size
-  return j
-}
-
-function fileToJson(a: UploadedFile): Record<string, unknown> {
-  return {
-    code: a.code,
-    name: a.name,
-    mime: a.mime,
-    size: a.size,
-    localPath: a.localPath,
-    state: a.uploadState,
-  }
-}
-
-function fileFromJson(j: Record<string, unknown>): UploadedFile {
-  return {
-    code: (j['code'] as string) || '',
-    name: (j['name'] as string) ?? null,
-    mime: (j['mime'] as string) ?? null,
-    size: j['size'] != null ? Number(j['size']) : null,
-    localPath: (j['localPath'] as string) || '',
-    uploadState: (j['state'] as UploadedFile['uploadState']) || 'done',
-    deduped: false,
-    sha256: null,
-  }
-}
+import {
+  chatPartFromJson,
+  fileFromJson,
+  fileToJson,
+  messagePartToJson,
+  partToJson,
+} from './local-codecs'
+import type {
+  ChatDraft,
+  ChatMessage,
+  Message,
+  Session,
+  UploadedFile,
+} from './models'
 
 // ---- the store ----
 
@@ -153,6 +70,7 @@ export class LocalStore {
         id TEXT NOT NULL,
         role TEXT NOT NULL,
         prev_id TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL DEFAULT '',
         order_key INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'complete',
@@ -179,7 +97,24 @@ export class LocalStore {
     // grouping / subsessions). CREATE TABLE IF NOT EXISTS never adds a column
     // to an already-existing table, so migrate old databases explicitly.
     try {
-      this.db.exec('ALTER TABLE local_sessions ADD COLUMN group_key TEXT NOT NULL DEFAULT \'\'')
+      this.db.exec(
+        "ALTER TABLE local_sessions ADD COLUMN group_key TEXT NOT NULL DEFAULT ''",
+      )
+    } catch {
+      /* column already present */
+    }
+    // v4 → v5: local_messages gains the message ORIGIN `source` column. The
+    // write paths left it out, so any cached rows predate it — and because the
+    // incremental sync trusts its tip anchor, those rows would keep rendering
+    // with an empty source (a session hand-off shown as the reader's own
+    // prompt). Adding the column SUCCEEDS only once; use that as the signal to
+    // drop the message cache so the next boot refetches with source intact.
+    try {
+      this.db.exec(
+        "ALTER TABLE local_messages ADD COLUMN source TEXT NOT NULL DEFAULT ''",
+      )
+      this.run('DELETE FROM local_messages', [])
+      this.run('DELETE FROM local_sync_state', [])
     } catch {
       /* column already present */
     }
@@ -204,15 +139,33 @@ export class LocalStore {
            last_message_at=excluded.last_message_at,
            last_message_preview=excluded.last_message_preview,
            updated_at=excluded.updated_at, last_synced_at=excluded.last_synced_at`,
-        [s.id, s.model, s.variant, s.preset, s.systemPrompt ?? '', s.maxTurns ?? 0,
-          s.locale ?? '', s.org, s.repo, s.branch, s.tipId ?? '', s.messageSeq,
-          s.group, s.lastMessageAt, s.lastMessagePreview, s.updatedAt, Math.floor(Date.now() / 1000)],
+        [
+          s.id,
+          s.model,
+          s.variant,
+          s.preset,
+          s.systemPrompt ?? '',
+          s.maxTurns ?? 0,
+          s.locale ?? '',
+          s.org,
+          s.repo,
+          s.branch,
+          s.tipId ?? '',
+          s.messageSeq,
+          s.group,
+          s.lastMessageAt,
+          s.lastMessagePreview,
+          s.updatedAt,
+          Math.floor(Date.now() / 1000),
+        ],
       )
     }
   }
 
   async loadSessions(): Promise<Session[]> {
-    const rows = this.all(`SELECT * FROM local_sessions ORDER BY updated_at DESC, id`)
+    const rows = this.all(
+      `SELECT * FROM local_sessions ORDER BY updated_at DESC, id`,
+    )
     return rows.map(r => ({
       id: String(r['id'] ?? ''),
       model: String(r['model'] ?? ''),
@@ -256,13 +209,17 @@ export class LocalStore {
   // ---- messages ----
 
   private chatFromRow(r: Record<string, SqlValue>): ChatMessage {
-    const parts = JSON.parse(String(r['parts_json'] || '[]')) as Record<string, unknown>[]
+    const parts = JSON.parse(String(r['parts_json'] || '[]')) as Record<
+      string,
+      unknown
+    >[]
     return {
       id: String(r['id']),
       role: String(r['role']),
       status: (String(r['status']) || 'complete') as ChatMessage['status'],
       createdAt: String(r['created_at']),
       prevId: String(r['prev_id']),
+      source: String(r['source'] ?? ''),
       seq: Number(r['order_key']),
       isLocal: false,
       parts: parts.map(chatPartFromJson),
@@ -278,7 +235,10 @@ export class LocalStore {
   }
 
   async serverTipId(sessionId: string): Promise<string> {
-    const r = this.all('SELECT tip_id FROM local_sync_state WHERE session_id = ?', [sessionId])
+    const r = this.all(
+      'SELECT tip_id FROM local_sync_state WHERE session_id = ?',
+      [sessionId],
+    )
     return r.length ? String(r[0]['tip_id']) : ''
   }
 
@@ -309,13 +269,23 @@ export class LocalStore {
       let order = (maxRow.length ? Number(maxRow[0]!['k'] ?? 0) : 0) + 1
       for (const m of msgs) {
         this.run(
-          `INSERT INTO local_messages (session_id, id, role, prev_id, created_at, order_key, status, parts_json)
-           VALUES (?,?,?,?,?,?,?,?)
+          `INSERT INTO local_messages (session_id, id, role, prev_id, source, created_at, order_key, status, parts_json)
+           VALUES (?,?,?,?,?,?,?,?,?)
            ON CONFLICT(session_id, id) DO UPDATE SET role=excluded.role,
-             prev_id=excluded.prev_id, created_at=excluded.created_at,
+             prev_id=excluded.prev_id, source=excluded.source,
+             created_at=excluded.created_at,
              status=excluded.status, parts_json=excluded.parts_json`,
-          [sessionId, m.id, m.role, m.prevId, m.createdAt ?? '', order++,
-            'complete', JSON.stringify(m.parts.map(messagePartToJson))],
+          [
+            sessionId,
+            m.id,
+            m.role,
+            m.prevId,
+            m.source ?? '',
+            m.createdAt ?? '',
+            order++,
+            'complete',
+            JSON.stringify(m.parts.map(messagePartToJson)),
+          ],
         )
       }
       await this.upsertSyncState(sessionId, tipId)
@@ -327,7 +297,11 @@ export class LocalStore {
   }
 
   /** Persist the in-memory conversation as the authoritative cache. */
-  async persistMessages(sessionId: string, msgs: ChatMessage[], tipId: string): Promise<void> {
+  async persistMessages(
+    sessionId: string,
+    msgs: ChatMessage[],
+    tipId: string,
+  ): Promise<void> {
     this.db.exec('BEGIN')
     try {
       this.run('DELETE FROM local_messages WHERE session_id = ?', [sessionId])
@@ -336,10 +310,19 @@ export class LocalStore {
         if (m.isLocal) continue // optimistic/streaming rows are not history
         this.run(
           `INSERT OR REPLACE INTO local_messages
-             (session_id, id, role, prev_id, created_at, order_key, status, parts_json)
-           VALUES (?,?,?,?,?,?,?,?)`,
-          [sessionId, m.id, m.role, m.prevId, m.createdAt, order++,
-            m.status, JSON.stringify(m.parts.map(partToJson))],
+             (session_id, id, role, prev_id, source, created_at, order_key, status, parts_json)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
+          [
+            sessionId,
+            m.id,
+            m.role,
+            m.prevId,
+            m.source ?? '',
+            m.createdAt,
+            order++,
+            m.status,
+            JSON.stringify(m.parts.map(partToJson)),
+          ],
         )
       }
       await this.upsertSyncState(sessionId, tipId)
@@ -350,7 +333,10 @@ export class LocalStore {
     }
   }
 
-  private async upsertSyncState(sessionId: string, tipId: string): Promise<void> {
+  private async upsertSyncState(
+    sessionId: string,
+    tipId: string,
+  ): Promise<void> {
     const oldest = this.all(
       'SELECT id FROM local_messages WHERE session_id = ? ORDER BY order_key ASC LIMIT 1',
       [sessionId],
@@ -380,7 +366,11 @@ export class LocalStore {
 
   // ---- drafts ----
 
-  async saveDraft(sessionId: string, text: string, attachments: UploadedFile[]): Promise<void> {
+  async saveDraft(
+    sessionId: string,
+    text: string,
+    attachments: UploadedFile[],
+  ): Promise<void> {
     if (!text.trim() && !attachments.length) {
       this.run('DELETE FROM local_drafts WHERE session_id = ?', [sessionId])
       return
@@ -398,7 +388,10 @@ export class LocalStore {
     const rows = this.all('SELECT * FROM local_drafts')
     const out: Record<string, ChatDraft> = {}
     for (const r of rows) {
-      const arr = JSON.parse(String(r['attachments_json'] || '[]')) as Record<string, unknown>[]
+      const arr = JSON.parse(String(r['attachments_json'] || '[]')) as Record<
+        string,
+        unknown
+      >[]
       out[String(r['session_id'])] = {
         text: String(r['draft_text']),
         attachments: arr.map(fileFromJson),

@@ -3,11 +3,9 @@
 // deliberately NOT used: it only yields WebM/Opus (Chrome) or MP4/AAC (Safari),
 // and the ASR gateway rejects WebM outright (and a WebM container sniffs as
 // `video/webm`, so the attachment card rendered as video).
-
-/** Target capture rate; matches Flutter's RecordConfig (16 kHz mono). */
-const SAMPLE_RATE = 16000
-/** Minimum PCM payload (bytes); below ≈0.4 s is an accidental tap. */
-const MIN_VOICE_BYTES = SAMPLE_RATE * 2 * 0.4 // 12800
+//
+// The pure PCM/WAV encoding lives in audio-encode.ts.
+import { concat, encodeWav, MIN_VOICE_BYTES, SAMPLE_RATE } from './audio-encode'
 
 /** AudioWorklet processor source (loaded from a Blob URL — no build asset). */
 const WORKLET_SRC = `
@@ -49,7 +47,9 @@ export class VoiceRecorder {
   async hasPermission(): Promise<boolean> {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ audio: true })
-      s.getTracks().forEach(t => t.stop())
+      s.getTracks().forEach(t => {
+        t.stop()
+      })
       return true
     } catch {
       return false
@@ -66,12 +66,17 @@ export class VoiceRecorder {
       // A release may have arrived while getUserMedia was pending: release the
       // freshly-granted stream and attach nothing.
       if (this.stopRequested) {
-        stream.getTracks().forEach(t => t.stop())
+        stream.getTracks().forEach(t => {
+          t.stop()
+        })
         return
       }
       this.stream = stream
       // Ask the context for 16 kHz directly; the browser resamples the mic.
-      const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      const Ctor =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext
       const ctx = new Ctor({ sampleRate: SAMPLE_RATE })
       this.ctx = ctx
       if (ctx.state === 'suspended') await ctx.resume()
@@ -95,25 +100,35 @@ export class VoiceRecorder {
     }
   }
 
-  private async attachWorklet(ctx: AudioContext, source: MediaStreamAudioSourceNode): Promise<void> {
+  private async attachWorklet(
+    ctx: AudioContext,
+    source: MediaStreamAudioSourceNode,
+  ): Promise<void> {
     if (ctx.audioWorklet === undefined) throw new Error('no AudioWorklet')
-    const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'application/javascript' }))
+    const url = URL.createObjectURL(
+      new Blob([WORKLET_SRC], { type: 'application/javascript' }),
+    )
     this.workletUrl = url
     await ctx.audioWorklet.addModule(url)
-    const node = new AudioWorkletNode(ctx, 'abcp-rec', { numberOfOutputs: 0 })
+    // Keep ONE output: a 0-output node cannot be connected, and the failed
+    // connect would trigger the ScriptProcessor fallback while this worklet is
+    // already wired to the source — capturing the mic TWICE (duplicate audio).
+    const node = new AudioWorkletNode(ctx, 'abcp-rec')
     node.port.onmessage = (e: MessageEvent<Float32Array>) => {
       if (!this.cancelled) this.frames.push(e.data)
     }
     source.connect(node)
-    // A worklet with no output still needs to be pulled; a muted gain to the
-    // destination keeps the graph alive without echoing the mic.
+    // Route the (silent) output to the destination so the graph keeps pulling.
     const mute = ctx.createGain()
     mute.gain.value = 0
     node.connect(mute).connect(ctx.destination)
     this.worklet = node
   }
 
-  private attachScriptProcessor(ctx: AudioContext, source: MediaStreamAudioSourceNode): void {
+  private attachScriptProcessor(
+    ctx: AudioContext,
+    source: MediaStreamAudioSourceNode,
+  ): void {
     const node = ctx.createScriptProcessor(4096, 1, 1)
     node.onaudioprocess = e => {
       if (this.cancelled) return
@@ -128,11 +143,29 @@ export class VoiceRecorder {
 
   /** Release every resource immediately (mic indicator clears here). */
   private teardown() {
-    try { this.worklet?.port.close() } catch { /* ignore */ }
-    try { this.processor?.disconnect() } catch { /* ignore */ }
-    try { this.worklet?.disconnect() } catch { /* ignore */ }
-    try { this.source?.disconnect() } catch { /* ignore */ }
-    this.stream?.getTracks().forEach(t => t.stop())
+    try {
+      this.worklet?.port.close()
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.processor?.disconnect()
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.worklet?.disconnect()
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.source?.disconnect()
+    } catch {
+      /* ignore */
+    }
+    this.stream?.getTracks().forEach(t => {
+      t.stop()
+    })
     void this.ctx?.close().catch(() => {})
     if (this.workletUrl !== null) {
       URL.revokeObjectURL(this.workletUrl)
@@ -152,7 +185,11 @@ export class VoiceRecorder {
     this.stopRequested = true
     const pending = this.starting
     if (pending !== null) {
-      try { await pending } catch { /* start failed */ }
+      try {
+        await pending
+      } catch {
+        /* start failed */
+      }
     }
     const rate = this.ctx?.sampleRate ?? SAMPLE_RATE
     const cancelled = this.cancelled
@@ -172,7 +209,11 @@ export class VoiceRecorder {
     this.stopRequested = true
     const pending = this.starting
     if (pending !== null) {
-      try { await pending } catch { /* start failed */ }
+      try {
+        await pending
+      } catch {
+        /* start failed */
+      }
     }
     this.frames = []
     this.teardown()
@@ -183,47 +224,4 @@ export class VoiceRecorder {
     this.frames = []
     this.teardown()
   }
-}
-
-/** Concatenate the collected mono frames into one buffer. */
-function concat(frames: Float32Array[]): Float32Array {
-  let n = 0
-  for (const f of frames) n += f.length
-  const out = new Float32Array(n)
-  let o = 0
-  for (const f of frames) {
-    out.set(f, o)
-    o += f.length
-  }
-  return out
-}
-
-/** Float32 [-1,1] mono → 16-bit PCM WAV (44-byte canonical header). */
-function encodeWav(samples: Float32Array, sampleRate: number): Uint8Array {
-  const dataBytes = samples.length * 2
-  const buf = new ArrayBuffer(44 + dataBytes)
-  const dv = new DataView(buf)
-  const ascii = (off: number, s: string) => {
-    for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i))
-  }
-  ascii(0, 'RIFF')
-  dv.setUint32(4, 36 + dataBytes, true)
-  ascii(8, 'WAVE')
-  ascii(12, 'fmt ')
-  dv.setUint32(16, 16, true) // PCM chunk size
-  dv.setUint16(20, 1, true) // PCM
-  dv.setUint16(22, 1, true) // mono
-  dv.setUint32(24, sampleRate, true)
-  dv.setUint32(28, sampleRate * 2, true) // byte rate (mono * 16-bit)
-  dv.setUint16(32, 2, true) // block align
-  dv.setUint16(34, 16, true) // bits per sample
-  ascii(36, 'data')
-  dv.setUint32(40, dataBytes, true)
-  let off = 44
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]!))
-    dv.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true)
-    off += 2
-  }
-  return new Uint8Array(buf)
 }
