@@ -34,6 +34,9 @@ run python3 avatars.py
 run python3 scopes.py
 # Generated web shells (index.html/manifest) must match web-shell/.
 run python3 web-shell/gen.py --check
+# Behavioural conformance: every full client's native suite must reference each
+# shared scenario id, and the Swift manifest must be the vendored copy.
+run python3 conformance.py --check
 
 # ---- heavier per-client compiles (opt-in) ----
 if [ "$FULL" = 1 ]; then
