@@ -196,7 +196,7 @@ def test_swiftui(pod: str = "demo-macx", token: str | None = None) -> bool:
         return False
 
     files = subprocess.check_output(
-        ["git", "ls-files", "Sources", "Tests", "Package.swift", "Package.resolved"],
+        ["git", "ls-files", "Sources", "Tests", "tool", "Package.swift", "Package.resolved"],
         cwd=root, text=True).split()
     log(f"push {len(files)} local files")
     for f in files:
@@ -227,6 +227,20 @@ def test_swiftui(pod: str = "demo-macx", token: str | None = None) -> bool:
     ok = "with 0 failures" in out and "failed (" not in out
     for line in out.splitlines():
         log(line)
+
+    # The iOS device target (arm64) is the app's real deployment target; build
+    # the ad-hoc-signed .ipa against the Xcode iPhoneOS SDK.
+    log("build ios .ipa (arm64)")
+    _, out = w.run(
+        f"cd {SWIFTUI_REMOTE} && {env} && bash tool/build-ios.sh /tmp/iosout 2>&1 | tail -3",
+        wait_s=2400)
+    if "IPA_OK" not in out:
+        log(f"ios build FAILED:\n{out}")
+        ok = False
+    else:
+        for line in out.splitlines():
+            if "IPA_OK" in line or ".ipa" in line:
+                log(line.strip())
     return ok
 
 
