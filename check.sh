@@ -6,13 +6,20 @@
 #
 #   bash check.sh            # fast: the python guards
 #   bash check.sh --full     # also flutter analyze + compose/swift compile
+#   bash check.sh --sandbox  # also build/run on the easyworker sandboxes
+#                            #   (android emulator + macOS Xcode; needs the
+#                            #   demo-* pods and is slow — see sandbox.py)
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 APPS="${AGENT_APPS_ROOT:-$(cd "$DIR/.." && pwd)}"
 export AGENT_APPS_ROOT="$APPS"
 FULL=0
-[ "${1:-}" = "--full" ] && FULL=1
+SANDBOX=0
+case "${1:-}" in
+  --full) FULL=1 ;;
+  --sandbox) FULL=1; SANDBOX=1 ;;
+esac
 rc=0
 run() {
   echo
@@ -49,15 +56,27 @@ if [ "$FULL" = 1 ]; then
 
   run bash -c "cd '$APPS/agent-compose' && JAVA_HOME=\${JAVA_HOME:-/opt/tools/mise/installs/java/17.0.2} gradle :compileKotlinDesktop :compileKotlinWasmJs -q"
 
-  # swiftui: swiftc -parse over every source (find, not ** glob).
+  # swiftui: swiftc -parse over every source (find, not ** glob). This is a
+  # SYNTAX check only — it does NOT link SwiftUI/LucideSwift or typecheck
+  # against them, so it cannot catch e.g. a missing `import LucideSwift` or a
+  # wrong argument label. Those need the real Xcode toolchain: `--sandbox`.
   echo
-  echo "===== swiftui swiftc -parse ====="
+  echo "===== swiftui swiftc -parse (syntax only) ====="
   if (cd "$APPS/agent-swiftui" && find Sources -name '*.swift' -print0 \
         | xargs -0 swiftc -parse) ; then
     echo "swiftui: parse OK"
   else
     echo "swiftui: parse FAILED"; rc=1
   fi
+fi
+
+# ---- real-platform builds on the easyworker sandboxes (opt-in, slow) ----
+# This is the ONLY tier that compiles each client with its real toolchain:
+#   * flutter/compose -> x86_64 debug APK, adb install + launch on the Android
+#     emulator sandbox (the APK is built HERE; the sandbox has adb only)
+#   * swiftui -> `swift build` + `swift test` on the macOS Xcode sandbox
+if [ "$SANDBOX" = 1 ]; then
+  run python3 sandbox.py all
 fi
 
 echo
