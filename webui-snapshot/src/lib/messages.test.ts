@@ -420,6 +420,79 @@ describe('MessagesController (server-driven state machine)', () => {
     ).toBe('Ha')
   })
 
+  it('reconnect replay: deltas for a PERSISTED step do not duplicate its parts', async () => {
+    const { ctrl, server } = boot()
+    await flush()
+    // A step streamed live, then persisted (server rows carry their own ids).
+    server.chan.push(
+      ev('message-added', {
+        message_id: 'a1',
+        prev_id: '',
+        role: 'assistant',
+        streaming: true,
+      }),
+    )
+    server.chan.push(
+      ev('text-delta', { id: 't0', text: 'Hello', message_id: 'a1' }),
+    )
+    server.chan.push(
+      ev('reasoning-delta', { id: 'r0', text: 'think', message_id: 'a1' }),
+    )
+    server.persist(
+      serverMsg('a1', 'assistant', '', [
+        { id: 'srv-t0', type: 'text', text: 'Hello' },
+        { id: 'srv-r0', type: 'reasoning', text: 'think' },
+      ]),
+    )
+    server.chan.push(ev('turn-complete', { reason: 'stop' }))
+    await flush()
+    const before = ctrl.messages.find(m => m.id === 'a1')!
+    expect(before.isLocal).toBe(false)
+    expect(before.parts).toHaveLength(2)
+
+    // Reconnect: the server replays the SAME deltas with the STREAM ids. They
+    // must be ignored — the persisted parts use different ids.
+    server.chan.push(
+      ev('text-delta', { id: 't0', text: 'Hello', message_id: 'a1' }),
+    )
+    server.chan.push(
+      ev('reasoning-delta', { id: 'r0', text: 'think', message_id: 'a1' }),
+    )
+    await flush(3)
+    const after = ctrl.messages.find(m => m.id === 'a1')!
+    expect(after.parts).toHaveLength(2)
+    expect(after.parts.filter(p => p.type === 'reasoning')).toHaveLength(1)
+    expect(
+      after.parts
+        .filter(p => p.type === 'text')
+        .map(p => p.text)
+        .join(''),
+    ).toBe('Hello')
+  })
+
+  it('live delta for a still-LOCAL step still appends', async () => {
+    const { ctrl, server } = boot()
+    await flush()
+    server.chan.push(
+      ev('message-added', {
+        message_id: 'a1',
+        prev_id: '',
+        role: 'assistant',
+        streaming: true,
+      }),
+    )
+    server.chan.push(
+      ev('text-delta', { id: 't0', text: 'a', message_id: 'a1' }),
+    )
+    server.chan.push(
+      ev('text-delta', { id: 't0', text: 'b', message_id: 'a1' }),
+    )
+    await flush(3)
+    const m = ctrl.messages.find(x => x.id === 'a1')!
+    expect(m.isLocal).toBe(true)
+    expect(m.parts.map(p => p.text).join('')).toBe('ab')
+  })
+
   it('tool-error marks the part error and keeps the bubble', async () => {
     const { ctrl, server } = boot()
     await flush()

@@ -133,11 +133,14 @@ export class MessageStore {
    *  No id is minted here; `id` comes from `message-added`/the delta's
    *  `message_id`, and `prevId` is the server's `prev_id` (known at step
    *  start). Reuses the existing bubble if present (a delta may arrive before
-   *  the formal `message-added{streaming:true}` on replay). */
-  ensureStreamingMsg(id: string, prevId?: string): string {
+   *  the formal `message-added{streaming:true}` on replay).
+   *
+   *  Returns the id, or null when the target is a PERSISTED (non-local) step —
+   *  i.e. a replay of a finished step; callers must skip the mutation. */
+  ensureStreamingMsg(id: string, prevId?: string): string | null {
     const existing = this.messages.find(m => m.id === id)
     if (existing) {
-      if (!existing.isLocal) return id
+      if (!existing.isLocal) return null // persisted step: replay duplicate
       if (existing.status === 'streaming') return id
       // Was finalized by a previous step's boundary; reopen it.
       this.messages = this.messages.map(m =>
@@ -214,6 +217,10 @@ export class MessageStore {
   setMsg(id: string, fn: (m: ChatMessage) => ChatMessage) {
     const idx = this.messages.findIndex(m => m.id === id)
     if (idx < 0) return
+    // A PERSISTED (non-local) row is a finished step: a streamed mutation for
+    // it is a reconnect replay duplicate. Dropping it here guards every stream
+    // mutator (part ensure/append/tool) in one place.
+    if (!this.messages[idx]!.isLocal) return
     this.messages[idx] = fn(this.messages[idx]!)
     this.notify()
   }

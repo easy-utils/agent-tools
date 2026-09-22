@@ -45,7 +45,13 @@ export function applyStreamEvent(
     case 'tool-input-start': {
       const sid = streamMsgId()
       if (sid == null) break
-      store.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
+      if (
+        store.ensureStreamingMsg(
+          sid,
+          params['prev_id'] as string | undefined,
+        ) == null
+      )
+        break
       if (event === 'text-start' && params['id'] != null) {
         store.ensurePart(sid, params['id'] as string, 'text')
       } else if (event === 'reasoning-start' && params['id'] != null) {
@@ -72,7 +78,13 @@ export function applyStreamEvent(
       if (params['id'] != null && params['text'] != null) {
         const sid = streamMsgId()
         if (sid == null) break
-        store.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
+        if (
+          store.ensureStreamingMsg(
+            sid,
+            params['prev_id'] as string | undefined,
+          ) == null
+        )
+          break
         store.appendDelta(
           sid,
           params['id'] as string,
@@ -85,7 +97,13 @@ export function applyStreamEvent(
       if (params['id'] != null && params['text'] != null) {
         const sid = streamMsgId()
         if (sid == null) break
-        store.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
+        if (
+          store.ensureStreamingMsg(
+            sid,
+            params['prev_id'] as string | undefined,
+          ) == null
+        )
+          break
         store.appendDelta(
           sid,
           `r${params['id']}`,
@@ -97,7 +115,13 @@ export function applyStreamEvent(
     case 'tool-call': {
       const sid = streamMsgId()
       if (sid == null) break
-      store.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
+      if (
+        store.ensureStreamingMsg(
+          sid,
+          params['prev_id'] as string | undefined,
+        ) == null
+      )
+        break
       const tcId = (params['toolCallId'] ?? params['id']) as string | undefined
       if (tcId != null) {
         store.addToolPart(
@@ -157,7 +181,13 @@ export function applyStreamEvent(
       if (part == null) break
       const sid = streamMsgId()
       if (sid == null) break
-      store.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
+      if (
+        store.ensureStreamingMsg(
+          sid,
+          params['prev_id'] as string | undefined,
+        ) == null
+      )
+        break
       const existing = store.messages
         .find(m => m.id === sid)
         ?.parts.some(p => p.id === part.id)
@@ -197,7 +227,10 @@ export function applyStreamEvent(
             )
           }
           store.streamingId = addedId
-          store.ensureStreamingMsg(addedId, prevId)
+          if (store.ensureStreamingMsg(addedId, prevId) == null) {
+            // Already persisted: a replay of a finished step, not a live one.
+            store.streamingId = null
+          }
         } else if (role === 'user') {
           // The prompt was persisted into the chain: render the user bubble
           // with the server-authored id/position. (The composer spinner is

@@ -22,6 +22,7 @@ import {
   type SiderTab,
 } from './nav'
 import { Prefs } from './prefs'
+import { sortSessionsByRecency } from './session-order'
 import { showErrorToast } from './toast.svelte'
 
 export type { AppPage, SessionOverlay, SiderTab } from './nav'
@@ -136,6 +137,14 @@ export class AppStore {
     this.sessionTimer = setTimeout(() => this.startSessionWatch(), delay * 1000)
   }
 
+  /** Assign the session list, ALWAYS ordered most-recent-first. The server
+   *  snapshot is ordered by `updated_at`, but a live upsert only advances a
+   *  row's `lastMessageAt` in place — without this re-sort the row's timestamp
+   *  changes while its position does not. */
+  private setSessions(list: Session[]) {
+    this.sessions = sortSessionsByRecency(list)
+  }
+
   private applySessionEvent(
     snapshot: boolean,
     upserts: Session[],
@@ -145,7 +154,7 @@ export class AppStore {
     // A frame arrived: the list stream is healthy again.
     connection.sessions = false
     if (snapshot) {
-      this.sessions = [...upserts]
+      this.setSessions(upserts)
       // First ever snapshot on this device: seed read watermarks so historical
       // sessions don't pop as unread; new ones start unread at 0.
       if (this.firstSnapshot) {
@@ -167,9 +176,9 @@ export class AppStore {
         if (i === -1) next.push(s)
         else next[i] = s
       }
-      this.sessions = removed.length
-        ? next.filter(s => !removed.includes(s.id))
-        : next
+      this.setSessions(
+        removed.length ? next.filter(s => !removed.includes(s.id)) : next,
+      )
     }
     // The open session is being read live: advance its watermark so returning
     // to the list shows no stale badge.
@@ -193,7 +202,7 @@ export class AppStore {
    *  connection; a manual refresh that fails is a one-shot action). */
   async refreshSessions() {
     try {
-      this.sessions = await this.api.listSessions()
+      this.setSessions(await this.api.listSessions())
     } catch (e) {
       showErrorToast(`${t('connectionError', { arg1: String(e) })}`)
     }
@@ -361,7 +370,9 @@ export class AppStore {
 
   /** Apply a settings/fork/rename result onto the live list. */
   applySession(updated: Session) {
-    this.sessions = this.sessions.map(s => (s.id === updated.id ? updated : s))
+    this.setSessions(
+      this.sessions.map(s => (s.id === updated.id ? updated : s)),
+    )
     this.bumpSessionRevision()
   }
 
