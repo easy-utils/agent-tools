@@ -227,8 +227,7 @@ export function applyStreamEvent(
       }
       break
     }
-    case 'error':
-    case 'provider-error': {
+    case 'error': {
       const errObj = params['error']
       const content = (
         typeof errObj === 'string'
@@ -239,7 +238,7 @@ export function applyStreamEvent(
               'Unknown error')
             : (params['message'] ?? 'Unknown error')
       ) as string
-      store.addError(content)
+      store.addError(content, 'model')
       store.sending = false
       store.notify()
       break

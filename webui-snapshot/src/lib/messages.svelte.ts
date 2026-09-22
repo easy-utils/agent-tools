@@ -41,13 +41,14 @@ export class MessagesController {
 
   private sessionListeners: SessionListener[] = []
 
-  private sendFailedMsg = (e: unknown): string => `send failed: ${e}`
+  // Body text for an error card: the card TITLE already says what failed
+  // (Send failed / Model error), so the body is the raw error message.
+  private sendFailedMsg = (e: unknown): string => String(e)
 
   constructor(
     api: AgentApi,
     getSessionId: () => string,
     local: LocalStore | null,
-    opts?: { sendFailed?: (e: unknown) => string },
   ) {
     this.api = api
     this.getSessionId = getSessionId
@@ -73,7 +74,6 @@ export class MessagesController {
         connection.chat = false
       },
     })
-    if (opts?.sendFailed) this.sendFailedMsg = opts.sendFailed
   }
 
   // ---- reactive surface (delegated to the store) ----
@@ -158,6 +158,10 @@ export class MessagesController {
   async deliver(text: string, attachments: UploadedFile[] = []): Promise<void> {
     const trimmed = text.trim()
     if (!trimmed && !attachments.length) return
+    // An error is TRANSIENT: sending a new prompt clears any prior error card,
+    // regardless of whether the previous turn finished. Done BEFORE the RPC so
+    // a send failure re-adds its own error below without removing it.
+    this.store.clearErrors()
     const codes = attachments.map(a => a.code)
     this.store.awaitingSend = true
     this.store.notify()
@@ -167,7 +171,7 @@ export class MessagesController {
       this.store.awaitingSend = false
       this.store.notify()
     } catch (e) {
-      this.store.addError(this.sendFailedMsg(e))
+      this.store.addError(this.sendFailedMsg(e), 'send')
       this.store.awaitingSend = false
       this.store.notify()
       throw e

@@ -244,7 +244,9 @@
     >
       <div class="flex min-w-0 max-w-full flex-col items-start gap-2 text-left">
         {#if isError}
-          <span class="text-micro font-semibold text-destructive">{t('error')}</span>
+          <span class="text-micro font-semibold text-destructive">
+            {msg.errorKind === 'send' ? t('sendFailedTitle') : t('modelError')}
+          </span>
         {/if}
         {#if sourceKind === 'session' || sourceKind === 'system'}
           <!-- Source chip: "来自会话 · {name}" / "来自系统 · {name}". The

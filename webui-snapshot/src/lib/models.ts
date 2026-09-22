@@ -218,6 +218,10 @@ export interface ChatMessage {
   /** ORIGIN of the message: `user`, `session:{name}`, `system:{name}`, or
    *  extension-defined. '' for agent-authored rows. */
   source: string
+  /** For a local `role:'error'` bubble only: what failed, so the card can
+   *  label it. `send` = the prompt RPC failed; `model` = an upstream/model
+   *  error surfaced on the stream. Never persisted. */
+  errorKind?: 'send' | 'model'
   /** Server-assigned id for an optimistic bubble, learned from the Prompt
    *  `accepted` response. Kept separate from `id` (the stable local key) so
    *  the optimistic bubble and its persisted copy can coexist until the

@@ -62,6 +62,16 @@ export class MessageStore {
     this.localErrors = []
   }
 
+  /** Drop every local error bubble. Called when the user sends a new prompt:
+   *  an error is a TRANSIENT state, cleared by the next send (not only by a
+   *  successful turn). */
+  clearErrors() {
+    if (this.localErrors.length === 0) return
+    this.localErrors = []
+    this.messages = this.messages.filter(m => m.role !== 'error')
+    this.notify()
+  }
+
   /** The local (non-chain) error bubbles, for re-seeding after a refresh. */
   get errors(): readonly ChatMessage[] {
     return this.localErrors
@@ -265,13 +275,14 @@ export class MessageStore {
     }))
   }
 
-  addError(text: string) {
+  addError(text: string, kind: 'send' | 'model' = 'model') {
     const now = Date.now()
     const err: ChatMessage = {
       id: `err${now}`,
       role: 'error',
       status: 'error',
       isLocal: true,
+      errorKind: kind,
       parts: [{ id: `p${now}`, type: 'text' as const, text, tool: '' }],
       createdAt: new Date().toISOString(),
       prevId: '',

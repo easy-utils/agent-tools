@@ -65,6 +65,10 @@ class FakeServer {
     this.promptErr = e
   }
 
+  clearPromptError(): void {
+    this.promptErr = null
+  }
+
   setMailbox(entries: MailboxEntry[]): void {
     this.mailboxEntries = entries
   }
@@ -449,7 +453,7 @@ describe('MessagesController (server-driven state machine)', () => {
     expect(tool?.state?.error).toBe('kaput')
   })
 
-  it('provider-error adds a local error bubble and clears sending', async () => {
+  it('a model error event adds a local error bubble and clears sending', async () => {
     const { ctrl, server } = boot()
     await flush()
     server.chan.push(ev('status', { type: 'busy' }))
@@ -463,25 +467,40 @@ describe('MessagesController (server-driven state machine)', () => {
     )
     await flush(3)
     expect(ctrl.sending).toBe(true)
-    server.chan.push(
-      ev('provider-error', { error: { message: 'upstream 500' } }),
-    )
+    server.chan.push(ev('error', { error: { message: 'upstream 500' } }))
     await flush(3)
     expect(ctrl.sending).toBe(false)
     const err = ctrl.messages.find(m => m.role === 'error')
     expect(err?.status).toBe('error')
     expect(err?.isLocal).toBe(true)
+    expect(err?.errorKind).toBe('model')
     expect(err?.parts[0]?.text).toContain('upstream 500')
   })
 
-  it('deliver failure surfaces a local error bubble and resets awaitingSend', async () => {
+  it('deliver failure surfaces a send error bubble and resets awaitingSend', async () => {
     const { ctrl, server } = boot()
     server.failPrompts(new Error('mailbox down'))
     await flush()
     await expect(ctrl.deliver('hi')).rejects.toThrow('mailbox down')
     expect(ctrl.awaitingSend).toBe(false)
     const err = ctrl.messages.find(m => m.role === 'error')
+    expect(err?.errorKind).toBe('send')
     expect(err?.parts[0]?.text).toContain('mailbox down')
+  })
+
+  it('sending a new prompt clears a prior error bubble (transient state)', async () => {
+    const { ctrl, server } = boot()
+    server.failPrompts(new Error('mailbox down'))
+    await flush()
+    await expect(ctrl.deliver('hi')).rejects.toThrow('mailbox down')
+    expect(ctrl.messages.some(m => m.role === 'error')).toBe(true)
+
+    // The next send clears it BEFORE the RPC — even if this one also fails.
+    server.clearPromptError()
+    const p = ctrl.deliver('again')
+    expect(ctrl.messages.some(m => m.role === 'error')).toBe(false)
+    await p
+    expect(ctrl.messages.some(m => m.role === 'error')).toBe(false)
   })
 
   it('pendingMailbox counts non-consumed entries on boot', async () => {
