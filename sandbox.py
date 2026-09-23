@@ -112,13 +112,13 @@ class Worker:
     def write(self, path: str, data: bytes) -> None:
         self._call("FileWrite", {"path": path, "content": base64.b64encode(data).decode()})
 
-    def run(self, command: str, wait_s: int = 900) -> tuple[int, str]:
+    def run(self, command: str, wait_s: int = 900, env: dict | None = None) -> tuple[int, str]:
         """Execute and block until the job finishes; return (exit, output)."""
-        jid = self._call("Execute", {"command": command})["jobId"]
+        jid = self._call("Execute", {"command": command, "env": env or {}})["jobId"]
         deadline = time.time() + wait_s
         st: dict = {}
         while time.time() < deadline:
-            st = self._call("JobWait", {"jobId": jid, "timeout_ms": 5000})
+            st = self._call("JobWait", {"jobId": jid, "timeoutMs": 5000})
             if st.get("state") in ("done", "failed", "killed"):
                 break
         out = self._call("JobOutput", {"jobId": jid, "start": 0})
@@ -244,9 +244,198 @@ def test_swiftui(pod: str = "demo-macx", token: str | None = None) -> bool:
     return ok
 
 
+# ---- desktop builds: compose (dmg/win) + flutter (macos) --------------------
+#
+# NOTHING downloads on the workers: every artifact (JDK, Flutter SDK, pub
+# cache, gradle distribution) is fetched HERE and imported over FileWrite in
+# 256MB chunks (sha256-verified worker-side). The guest networks are
+# unreliable for large transfers (the gradle zip stalled at 50/137MB on the
+# Windows VM; JDK redirects to github time out from macOS).
+
+CHUNK = 256 * 1024 * 1024
+GRADLE_URL = "https://services.gradle.org/distributions/gradle-9.7.1-bin.zip"
+FLUTTER_VER = "3.47.5"
+
+
+def upload_file(w: Worker, local: Path, remote: str) -> None:
+    """Chunked FileWrite + worker-side reassembly + sha256 verify (cross-platform)."""
+    import hashlib
+    data_sha = hashlib.sha256(local.read_bytes()).hexdigest()
+    parts: list[str] = []
+    with open(local, "rb") as f:
+        part = 0
+        while buf := f.read(CHUNK):
+            w._call("FileWrite", {"path": f"{remote}.part{part:02d}",
+                                  "content": base64.b64encode(buf).decode()})
+            parts.append(f"{remote}.part{part:02d}")
+            part += 1
+    if w.info().get("os") == "windows":
+        rt = remote.replace("/", "\\")
+        ps = [p.replace("/", "\\") for p in parts]
+        if len(ps) == 1:
+            reasm = f"move /y {ps[0]} {rt}"
+        else:
+            reasm = f"copy /b {'+'.join(ps)} {rt} >nul"
+        _, out = w.run(f'cmd /c "{reasm} & certutil -hashfile {rt} SHA256"')
+        ok = data_sha.upper() in out.upper()
+    else:
+        if len(parts) == 1:
+            reasm = f"mv {parts[0]} {remote}"
+        else:
+            reasm = f"cat {remote}.part* > {remote} && rm -f {remote}.part*"
+        _, out = w.run(f"{reasm} && echo {data_sha}  {remote} | shasum -a 256 -c -")
+        ok = ": OK" in out
+    if not ok:
+        raise RuntimeError(f"upload verify failed for {local}: {out[-300:]}")
+
+
+def fetch_local(url: str, dest: Path) -> Path:
+    """Download ONCE on the dev pod (proxy env honoured), tencent mirror ok."""
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["curl", "--http1.1", "-sSL", "--retry", "3", "-o", str(dest), url], check=True)
+    return dest
+
+
+def gradle_dists_hash(url: str) -> str:
+    """The wrapper's dist dir name: base36 of the MD5 of the distribution URL."""
+    import hashlib
+    n = int.from_bytes(hashlib.md5(url.encode()).digest(), "big")
+    alpha = "0123456789abcdefghijklmnopqrstuvwxyz"
+    s = ""
+    while n:
+        s = alpha[n % 36] + s
+        n //= 36
+    return s
+
+
+def provision_mac(w: Worker) -> None:
+    """JDK 17 + Flutter SDK on the mac sandbox (uploaded, never downloaded)."""
+    _, out = w.run("ls /Users/docker/tools/jdk17/Contents/Home/bin/java "
+                   "/Users/docker/tools/flutter/bin/flutter")
+    if "No such file" not in out:
+        log("mac toolchains already provisioned")
+        return
+    log("provisioning macx: JDK17 + Flutter (local download -> import)")
+    jdk = fetch_local(
+        "https://api.adoptium.net/v3/binary/latest/17/ga/mac/x64/jdk/hotspot/normal/eclipse",
+        Path("/tmp/opencode/wdl/jdk17-mac.tar.gz"))
+    flz = fetch_local(
+        f"https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/"
+        f"flutter_macos_{FLUTTER_VER}-stable.zip",
+        Path("/tmp/opencode/wdl/flutter-mac.zip"))
+    upload_file(w, jdk, "dl/jdk17-mac.tar.gz")
+    upload_file(w, flz, "dl/flutter-mac.zip")
+    _, out = w.run(
+        "mkdir -p ~/tools && cd ~/tools && "
+        "tar -xzf ~/ewws/dl/jdk17-mac.tar.gz && rm -rf jdk17 && mv jdk-17* jdk17 && "
+        "rm -rf flutter && tar -xf ~/ewws/dl/flutter-mac.zip && "
+        "/Users/docker/tools/jdk17/Contents/Home/bin/java -version 2>&1 | head -1 && "
+        "/Users/docker/tools/flutter/bin/flutter --version | head -1")
+    log(out.strip())
+
+
+def sync_dir(w: Worker, local_repo: Path, remote: str, extra_excludes: list[str]) -> None:
+    tgz = Path("/tmp/opencode") / f"{remote}-src.tgz"
+    excl = ["build", ".gradle", ".dart_tool", "local.properties", ".kotlin",
+            "android/build", ".pub-cache"] + extra_excludes
+    args = []
+    for e in excl:
+        args += ["--exclude", f"./{e}"]
+    subprocess.run(["tar", "czf", str(tgz)] + args + ["."],
+                   cwd=local_repo, check=True)
+    data = tgz.read_bytes()
+    w._call("SyncFolder", {"tarball": base64.b64encode(data).decode(),
+                           "dest": remote, "clean": True, "rev": "sandbox"})
+
+
+def compose_mac(token: str | None) -> bool:
+    w = Worker("demo-macx", token)
+    provision_mac(w)
+    log("sync compose source")
+    sync_dir(w, APPS_ROOT / "agent-compose", "compose", [])
+    env = {"JAVA_HOME": "/Users/docker/tools/jdk17/Contents/Home",
+           "GRADLE_USER_HOME": "/Users/docker/ggradle"}
+    # NOTE: env MUST go through ExecuteRequest.env — an in-shell `export` does
+    # not reach the gradlew subprocess under the builtin interpreter.
+    # -PpackageVersion: jpackage rejects a version whose FIRST number is 0.
+    w.run("cd compose && chmod +x gradlew", env=env)
+    _, out = w.run(
+        "cd compose && ./gradlew --no-daemon packageReleaseDmg "
+        "-PpackageVersion=1.0.2 2>&1 | tail -5; "
+        "find build/compose/binaries -name '*.dmg' -exec ls -la {} \\;", wait_s=3600, env=env)
+    ok = ".dmg" in out and "BUILD" in out
+    for line in out.splitlines():
+        if ".dmg" in line or "BUILD" in line:
+            log(line.strip())
+    return ok
+
+
+def flutter_mac(token: str | None) -> bool:
+    w = Worker("demo-macx", token)
+    provision_mac(w)
+    log("sync flutter source + pub cache")
+    sync_dir(w, APPS_ROOT / "agent-flutter", "flut", [])
+    pub = Path("/tmp/opencode/wdl/pub-cache.tgz")
+    if not pub.exists():
+        subprocess.run(["tar", "czf", str(pub), "-C", str(Path.home()), ".pub-cache"], check=True)
+    _, has = w.run("ls /Users/docker/.pub-cache/hosted")
+    if "No such file" in has:
+        upload_file(w, pub, "dl/pub-cache.tgz")
+        w.run("tar -xzf ~/ewws/dl/pub-cache.tgz -C /Users/docker")
+    # First build after a clean sync sometimes trips on the one-time SPM/pub
+    # resolution (the guest's github access is flaky); a retry completes it.
+    out = ""
+    for attempt in (1, 2):
+        _, out = w.run(
+            "cd ~/ewws/flut && /Users/docker/tools/flutter/bin/flutter build macos --release "
+            "2>&1 | tail -4; ls build/macos/Build/Products/Release/ "
+            "2>/dev/null | head -4", wait_s=3600)
+        if "agent_app.app" in out:
+            break
+        log(f"attempt {attempt} failed; retrying")
+    ok = "agent_app.app" in out
+    for line in out.splitlines()[:6]:
+        log(line.strip())
+    return ok
+
+
+def compose_win(token: str | None) -> bool:
+    w = Worker("demo-win", token)
+    log("sync compose source")
+    sync_dir(w, APPS_ROOT / "agent-compose", "compose", [])
+    env = {"JAVA_HOME": r"C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot",
+           "GRADLE_USER_HOME": r"C:\Users\Docker\ggradle",
+           "GITHUB_ACTOR": os.environ.get("GITHUB_ACTOR", "SilverMelon233"),
+           "GITHUB_TOKEN": os.environ.get("GITHUB_TOKEN", "")}
+    # Seed the wrapper's dist dir with an IMPORTED distribution (the VM's own
+    # download stalls: observed frozen at 50/137MB).
+    d = r"C:\Users\Docker\ggradle\wrapper\dists\gradle-9.7.1-bin\\" + gradle_dists_hash(GRADLE_URL)
+    _, seeded = w.run(f'cmd /c "if exist {d}\\gradle-9.7.1-bin.zip (echo SEEDED) else (echo NO)"')
+    if "SEEDED" not in seeded:
+        log("importing gradle 9.7.1 dist into the win wrapper cache")
+        gz = fetch_local(GRADLE_URL.replace(
+            "https://services.gradle.org",
+            "https://mirrors.cloud.tencent.com/gradle").replace(
+            "gradle/gradle", "gradle"), Path("/tmp/opencode/wdl/gradle-9.7.1-bin.zip"))
+        upload_file(w, gz, "dl/gradle-9.7.1-bin.zip")
+        w.run(f'cmd /c "if not exist {d} mkdir {d} & '
+              f'copy /y C:\\Users\\Docker\\ewws\\dl\\gradle-9.7.1-bin.zip '
+              f'{d}\\gradle-9.7.1-bin.zip >nul & echo IMPORTED"')
+    _, out = w.run(
+        'cd compose && cmd /c "gradlew.bat --no-daemon '
+        ':compileKotlinDesktop :compileKotlinWasmJs 2>&1"', wait_s=3600, env=env)
+    tail = "\n".join(out.splitlines()[-4:])
+    ok = "BUILD SUCCESSFUL" in out
+    log(tail.strip())
+    return ok
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("target", choices=["android", "macos", "all"])
+    ap.add_argument("target", choices=["android", "macos", "all",
+                                       "compose-mac", "compose-win", "flutter-mac"])
     ap.add_argument("client", nargs="?", default="both",
                     choices=["flutter", "compose", "both"],
                     help="android only")
@@ -270,6 +459,17 @@ def main() -> int:
         print("\n===== swiftui on demo-macx =====")
         try:
             if not test_swiftui("demo-macx", args.token):
+                failed += 1
+        except Exception as e:  # noqa: BLE001
+            log(f"ERROR {type(e).__name__}: {e}"); failed += 1
+
+    desktop = {"compose-mac": compose_mac, "compose-win": compose_win,
+               "flutter-mac": flutter_mac}
+    if args.target in desktop:
+        fn = desktop[args.target]
+        print(f"\n===== {args.target} =====")
+        try:
+            if not fn(args.token):
                 failed += 1
         except Exception as e:  # noqa: BLE001
             log(f"ERROR {type(e).__name__}: {e}"); failed += 1
